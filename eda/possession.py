@@ -23,7 +23,7 @@ possession_check = duckdb.sql(f"""SELECT id, index_num, period, minute, second, 
                                 
                                 """)
 
-print(possession_check)
+#print(possession_check)
 
 possession_check2 = duckdb.sql(f"""
                                with subset_records as (
@@ -50,5 +50,11 @@ possession_check2 = duckdb.sql(f"""
                                 AND possession_team_id != team_id
                                 """)
 
-print(possession_check2)
+#print(possession_check2)
 
+duckdb.sql(f"""
+                               SELECT is_international, season_name, country_name, count(distinct match_id)
+                                FROM read_parquet('{project_location}/Statsbomb/matches.parquet') 
+                                GROUP BY is_international, season_name, country_name
+                                ORDER BY is_international, season_name, country_name
+                                """).write_csv('macth_breakdown.csv', header=True)

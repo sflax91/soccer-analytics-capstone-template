@@ -112,5 +112,5 @@ possession_tl = duckdb.sql(f"""
                                 ST_Distance(ST_Point(poss_start_x, poss_start_y), ST_Point(poss_end_x, poss_end_y)) relative_distance
                                 FROM start_stop_coordinates 
                                 ORDER BY possession
-                                """)
+                                """).write_parquet('possession_metrics.parquet')
 print(possession_tl)

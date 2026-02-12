@@ -122,3 +122,12 @@ soccer_trades = duckdb.sql(f"""SELECT *
                  """)
 #print(soccer_trades)
 #print(soccer_trades.columns)
+
+
+soccer_matches = duckdb.sql(f"""SELECT distinct season, competition
+                 FROM read_parquet('{project_location}/Statsbomb/matches.parquet')
+                 WHERE SEASON IN ('2020','2022','2024') AND country_name = 'Europe' AND is_international = TRUE AND match_status_360 = 'available'
+                 LIMIT 100
+                 """)
+print(soccer_matches)
+print(soccer_matches.columns)
