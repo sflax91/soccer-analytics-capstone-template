@@ -543,11 +543,43 @@ def spatial_analysis():
     pass_successful_spatial = successful_passes.group_by(["team", "x_bin", "y_bin"]).count().rename({"count": "successful_passes"})
     plot_all_hmaps(successful_passes, "successful_passes", "Successful Passes")
     print(pass_successful_spatial)
-    # #play_pattern
+    # play_pattern
     # play_pattern_spatial = df.group_by(["team", "play_pattern", "x_bin", "y_bin"]).count()
     # print(play_pattern_spatial)
 
 
+def spatial_analysis_2():
+    #map all starts of possesions ending in a shot
+    Bin_Size = 5  # meters
+    df = pl.read_parquet(STATSBOMB_DIR / "events.parquet")
+    df = df.with_columns([
+        (pl.col("location_x") // Bin_Size).cast(pl.Int64).alias("x_bin"),
+        (pl.col("location_y") // Bin_Size).cast(pl.Int64).alias("y_bin"),
+    ])
+    # print(df.columns)
+    #genAI used for syntax
+    shot_possessions = df.filter(pl.col("type") == "Shot").select(["match_id", "possession"]).unique()
+    keys = shot_possessions.select(pl.struct(["match_id", "possession"]).alias("key")).to_series()
+    shot_sequences = df. filter(pl.struct(["match_id", "possession"]).is_in(keys))
+    shot_sequences_sorted = shot_sequences.sort(["match_id","possession", "minute", "second"])
+    shot_sequences_binned =shot_sequences_sorted.group_by(["team", "x_bin", "y_bin"]).agg([
+        pl.count().alias("shots"),
+        pl.col("shot_statsbomb_xg").sum().alias("total_xg"),
+        pl.col("shot_statsbomb_xg").mean().alias("avg_xg"),
+        ])
+    #heatmap of start of shot-ending possessions
+    possession_starts = shot_sequences.group_by("match_id", "possession").first()
+    plot_all_hmaps(possession_starts, "shot_statsbom_xg", "Start of Shot Possessions")
+    #heatmap of whole possession xg total
+    plot_all_hmaps(shot_sequences_binned, "total_xg", "Shot-Ending Possession Area")
+    #passes of shot possessions
+    passes = shot_sequences_sorted.filter(pl.col("type") == "Pass")
+    pass_spatial = passes.group_by(["team", "x_bin", "y_bin"]).count().rename({"count": "passes"})
+    plot_all_hmaps(pass_spatial, "passes", "Passes")
+    #successfull passes of shot possessions
+    successful_passes = shot_sequences.filter(pl.col("pass_outcome").is_null().alias("successful"))
+    pass_successful_spatial = successful_passes.group_by(["team", "x_bin", "y_bin"]).count().rename({"count": "successful_passes"})
+    plot_all_hmaps(pass_successful_spatial, "successful_passes", "Successful Passes")
 
 def main():
     """Run complete EDA"""
@@ -572,12 +604,13 @@ def main():
     
     # Statsbomb analysis
     if STATSBOMB_DIR.exists():
-        analyze_statsbomb_matches()
-        analyze_statsbomb_events()
-        analyze_statsbomb_lineups()
-        analyze_statsbomb_three_sixty()
-        analyze_statsbomb_reference()
-        spatial_analysis()
+        # analyze_statsbomb_matches()
+        # analyze_statsbomb_events()
+        # analyze_statsbomb_lineups()
+        # analyze_statsbomb_three_sixty()
+        # analyze_statsbomb_reference()
+        # spatial_analysis()
+        spatial_analysis_2()
     else:
         print("\n[ERROR] Statsbomb data directory not found. Please run data/download_data.py first.")
     
