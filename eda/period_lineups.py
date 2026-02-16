@@ -14,6 +14,19 @@ duckdb.sql(f"""
                          WHERE IFNULL(to_period,100) < from_period
                          OR from_time = IFNULL(to_time,'N/A')
                          OR (IFNULL(to_period,100) = from_period AND from_time >= IFNULL(to_time,'N/A'))
+
+                         UNION
+
+                        SELECT match_id--, team_id, player_id, from_period, to_period, from_time, to_time, next_time, position_name
+                        FROM (
+                        SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
+                        , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
+                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+                        )
+                        WHERE next_time != to_time
+                        AND next_time IS NOT NULL
+                        AND next_position != position_name
+                        AND from_period <= to_period
                          ),
                            half_timestamps as (
                               SELECT match_id, team_id, period, minute, second, timestamp, start_date + TO_MINUTES(minute) + TO_SECONDS(second) period_timestamp, type
