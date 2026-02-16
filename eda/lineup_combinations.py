@@ -78,7 +78,7 @@ check_lineups = duckdb.sql(f"""
                            ELSE DEFENSE_FORMATION || '-' || MIDFIELD_FORMATION || '-' || ATTACK_FORMATION END AS OVERALL_FORMATION
                            , BACKS + MIDFIELDERS + FORWARDS + GK PLAYERS_ON_PITCH
                            FROM get_subformation
-                           WHERE BACKS + MIDFIELDERS + FORWARDS + GK < 10 
+                           WHERE BACKS + MIDFIELDERS + FORWARDS + GK < 11 
                         ORDER BY BACKS + MIDFIELDERS + FORWARDS + GK
                     """)#.write_parquet('period_lineups.parquet')
 

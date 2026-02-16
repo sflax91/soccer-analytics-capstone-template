@@ -461,13 +461,14 @@ test_query5 = duckdb.sql(f"""
                               AND alc.interval_start < player_end_date
                         )
 
-
+                        SELECT COUNT(distinct match_id) from (
                               SELECT match_id, team_id, period, interval_start, interval_end, COUNT(*)
                               FROM match_intervals
                               WHERE match_id NOT IN (SELECT match_id FROM bad_matches)
                               GROUP BY match_id, team_id, period, interval_start, interval_end
                               HAVING COUNT(*) > 11 OR COUNT(*) < 9
                               ORDER BY match_id
+                              )
 
                     """)
 

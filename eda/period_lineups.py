@@ -8,7 +8,16 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
 duckdb.sql(f"""
-                         with bad_matches as (
+                          with lineup_checks as (
+                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, next_time, position_name, next_position
+                        FROM (
+                                    SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
+                                    , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
+                                    FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+                                    )
+                         ),
+                         
+                         bad_matches as (
                          SELECT distinct match_id
                          FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') 
                          WHERE IFNULL(to_period,100) < from_period
@@ -17,12 +26,8 @@ duckdb.sql(f"""
 
                          UNION
 
-                        SELECT match_id--, team_id, player_id, from_period, to_period, from_time, to_time, next_time, position_name
-                        FROM (
-                        SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
-                        , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
-                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
-                        )
+                        SELECT distinct match_id
+                        FROM lineup_checks
                         WHERE next_time != to_time
                         AND next_time IS NOT NULL
                         AND next_position != position_name
@@ -35,6 +40,19 @@ duckdb.sql(f"""
                                     WHERE type IN ('Half End', 'Half Start')
                                     )
                         ),
+                        correct_lineups as (
+                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, position_name
+                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+
+                        UNION
+                        
+                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, to_time, next_time, position_name
+                        FROM lineup_checks
+                        WHERE next_time != to_time
+                        AND next_time IS NOT NULL
+                        AND next_position = position_name
+                        AND from_period <= to_period
+                        ),
                          initial_dates as (
                         SELECT distinct l.match_id, l.team_id, player_id, country_id, position_name, from_time, to_time, from_period, IFNULL(to_period, mp.max_period) to_period , 
                          strptime('2026-01-01' , '%Y-%m-%d') start_date,
@@ -42,7 +60,8 @@ duckdb.sql(f"""
                          CAST(SUBSTR(from_time, LEN(from_time) - 1) AS INTEGER) from_second,
                          IFNULL(CAST(LEFT(to_time, INSTR(to_time, ':') - 1 ) AS INTEGER), mp2.minute)  to_minute, 
                          IFNULL(CAST(SUBSTR(to_time, LEN(to_time) - 1) AS INTEGER), mp2.second) to_second
-                         FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') l
+                         FROM correct_lineups l
+                         --read_parquet('{project_location}/data/Statsbomb/lineups.parquet') l
                          LEFT JOIN (SELECT match_id, MAX(period) max_period from half_timestamps GROUP BY match_id) mp
                               ON l.match_id = mp.match_id
                         LEFT JOIN (SELECT distinct match_id, team_id, period, minute, second FROM half_timestamps) mp2
@@ -181,16 +200,18 @@ duckdb.sql(f"""
                               AND alc.interval_start < player_end_date
                         )
 
+
                         SELECT *
                         FROM match_intervals
                         WHERE match_id NOT IN (
-                        SELECT distinct match_id FROM (
-                              SELECT match_id, team_id, period, interval_start, interval_end, COUNT(*)
-                              FROM match_intervals
-                              WHERE match_id NOT IN (SELECT match_id FROM bad_matches)
-                              GROUP BY match_id, team_id, period, interval_start, interval_end
-                              HAVING COUNT(*) > 11 OR COUNT(*) < 9
-                              ORDER BY match_id)
-                        )
+                                                SELECT distinct match_id 
+                                                      FROM (
+                                                      SELECT match_id, team_id, period, interval_start, interval_end, COUNT(*)
+                                                      FROM match_intervals
+                                                      WHERE match_id NOT IN (SELECT match_id FROM bad_matches)
+                                                      GROUP BY match_id, team_id, period, interval_start, interval_end
+                                                      HAVING COUNT(*) > 11 OR COUNT(*) < 9
+                                                      )
+                                                )
 
                     """).write_parquet('period_lineups.parquet')
