@@ -7,7 +7,7 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
-check_lineups = duckdb.sql(f"""
+duckdb.sql(f"""
                               with get_player_type as (
                               SELECT mi.*, player_id, 
                               CASE WHEN position_type = 'GK' THEN 1 ELSE 0 END AS GK,
