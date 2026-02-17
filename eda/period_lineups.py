@@ -203,12 +203,12 @@ duckdb.sql(f"""
 
                         SELECT *
                         FROM match_intervals
-                        WHERE match_id NOT IN (
+                        WHERE match_id NOT IN (SELECT match_id FROM bad_matches) 
+                              AND match_id NOT IN (
                                                 SELECT distinct match_id 
                                                       FROM (
                                                       SELECT match_id, team_id, period, interval_start, interval_end, COUNT(*)
                                                       FROM match_intervals
-                                                      WHERE match_id NOT IN (SELECT match_id FROM bad_matches)
                                                       GROUP BY match_id, team_id, period, interval_start, interval_end
                                                       HAVING COUNT(*) > 11 OR COUNT(*) < 9
                                                       )

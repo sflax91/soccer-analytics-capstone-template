@@ -57,7 +57,7 @@ check_lineups = duckdb.sql(f"""
                                  THEN CAST(DEFENDING_MIDFIELDERS as varchar) || '-' || CAST(MIDFIELDERS - DEFENDING_MIDFIELDERS as varchar)
                                  WHEN DEFENDING_MIDFIELDERS = 0 AND ATTACKING_MIDFIELDERS > 0 AND MIDFIELDERS - ATTACKING_MIDFIELDERS  > 0 
                                  THEN CAST(MIDFIELDERS as varchar) || '-' || CAST(MIDFIELDERS - ATTACKING_MIDFIELDERS as varchar)
-                                 WHEN MIDFIELDERS - DEFENDING_MIDFIELDERS - ATTACKING_MIDFIELDERS = 0 AND DEFENDING_MIDFIELDERS != ATTACKING_MIDFIELDERS
+                                 WHEN MIDFIELDERS - DEFENDING_MIDFIELDERS - ATTACKING_MIDFIELDERS = 0 AND DEFENDING_MIDFIELDERS != ATTACKING_MIDFIELDERS AND ATTACKING_MIDFIELDERS > 0 AND DEFENDING_MIDFIELDERS > 0
                                  THEN CAST(DEFENDING_MIDFIELDERS as varchar) || '-' || CAST(ATTACKING_MIDFIELDERS as varchar)
                                  ELSE CAST(MIDFIELDERS as varchar) 
                                  END AS MIDFIELD_FORMATION,
@@ -70,6 +70,8 @@ check_lineups = duckdb.sql(f"""
                                  AND position_stats.interval_start = pivot_players.interval_start
                                  AND position_stats.interval_end = pivot_players.interval_end
                            )
+                           SELECT *
+                           FROM (
                            SELECT get_subformation.*,
                            CASE
                            WHEN ATTACK_FORMATION IS NULL THEN DEFENSE_FORMATION || '-' || MIDFIELD_FORMATION
@@ -79,7 +81,5 @@ check_lineups = duckdb.sql(f"""
                            , BACKS + MIDFIELDERS + FORWARDS + GK PLAYERS_ON_PITCH
                            FROM get_subformation
                            WHERE BACKS + MIDFIELDERS + FORWARDS + GK < 11 
-                        ORDER BY BACKS + MIDFIELDERS + FORWARDS + GK
-                    """)#.write_parquet('period_lineups.parquet')
-
-print(check_lineups)
+                           )
+                    """).write_parquet('lineup_combinations.parquet')
