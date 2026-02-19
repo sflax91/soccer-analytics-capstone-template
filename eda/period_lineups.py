@@ -198,11 +198,14 @@ duckdb.sql(f"""
                               AND alc.period = pmt.period
                               AND alc.interval_start >= player_start_date
                               AND alc.interval_start < player_end_date
-                        )
-
-
-                        SELECT *
+                        ),
+                        get_player_position as (
+                        SELECT match_intervals.*, 
+                         CASE WHEN POSITION_SIDE IN ('RC','LC') THEN 'C' ELSE POSITION_SIDE END AS POSITION_SIDE_ADJ, 
+                         POSITION_TYPE_ALT, POSITION_BEHAVIOR, POSITION_TYPE
                         FROM match_intervals
+                        LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
+                              ON match_intervals.position_name = pt.position_name
                         WHERE match_id NOT IN (SELECT match_id FROM bad_matches) 
                               AND match_id NOT IN (
                                                 SELECT distinct match_id 
@@ -213,5 +216,23 @@ duckdb.sql(f"""
                                                       HAVING COUNT(*) > 11 OR COUNT(*) < 9
                                                       )
                                                 )
+
+                         ),
+                        get_ranks as (
+                        SELECT team_id, match_id, period, interval_start, interval_end, player_id, country_id, POSITION_SIDE_ADJ, POSITION_TYPE_ALT, POSITION_BEHAVIOR, POSITION_TYPE,
+                        RANK() OVER (PARTITION BY match_id, team_id, period, interval_start, POSITION_SIDE_ADJ ORDER BY match_id, team_id, period, interval_start, POSITION_SIDE_ADJ, player_id) PLAYER_POSITION_SIDE_ADJ_ID_RANK,
+                        RANK() OVER (PARTITION BY match_id, team_id, period, interval_start, POSITION_TYPE ORDER BY match_id, team_id, period, interval_start, POSITION_TYPE, player_id) PLAYER_POSITION_TYPE_ID_RANK,
+                        RANK() OVER (PARTITION BY match_id, team_id, period, interval_start, POSITION_TYPE_ALT ORDER BY match_id, team_id, period, interval_start, POSITION_TYPE_ALT, player_id) PLAYER_POSITION_TYPE_ALT_ID_RANK,
+                        RANK() OVER (PARTITION BY match_id, team_id, period, interval_start, country_id ORDER BY match_id, team_id, period, interval_start, country_id, player_id) PLAYER_COUNTRY_ID_RANK,
+                        RANK() OVER (PARTITION BY match_id, team_id, period, interval_start, interval_end ORDER BY match_id, team_id, period, interval_start, interval_end, player_id) PLAYER_SQUAD_RANK
+                        
+                        FROM get_player_position
+                        )
+                        SELECT *
+                        FROM get_ranks
+                        ORDER BY match_id, team_id, period
+
+
+      
 
                     """).write_parquet('period_lineups.parquet')

@@ -7,7 +7,7 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
-duckdb.sql(f"""
+match_form = duckdb.sql(f"""
                               with get_player_type as (
                               SELECT pl.*, player_id, position_type,
                               CASE WHEN position_type = 'M' THEN 1 ELSE 0 END AS MIDFIELDERS,
@@ -88,4 +88,6 @@ duckdb.sql(f"""
                            ELSE DEFENSE_FORMATION || '-' || MIDFIELD_FORMATION || '-' || ATTACK_FORMATION END AS OVERALL_FORMATION
                            
                            FROM get_subformation
-                    """).write_parquet('match_team_formations.parquet')
+                    """)#.write_parquet('match_team_formations.parquet')
+
+print(match_form)

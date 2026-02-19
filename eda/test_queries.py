@@ -7,114 +7,122 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
-test_query = duckdb.sql(f"""
-                        SELECT *
-                              FROM read_parquet('{project_location}/eda/period_lineups.parquet')  pl
-                              --LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
-                                 --ON pl.position_name = pt.position_name
-
-                    """)
-
-print(test_query)
-
-
-test_query2 = duckdb.sql(f"""
-                  with all_lineups as (
-                  SELECT *
-                  FROM read_parquet('{project_location}/eda/lineup_players.parquet')
-                  ),
-                  back_to_rows as (
-                  UNPIVOT all_lineups
-                  ON position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, position_10, position_11
-                  INTO 
-                        NAME PLAYER_RANK
-                        VALUE PLAYER_ID
-                  )
-
-                  SELECT *
-                  FROM back_to_rows
-                              --WHERE match_id = 68334
-
-                    """)#.write_csv('player_tracking2.csv')
-
-print(test_query2)
-
-
-
-
-test_query3 = duckdb.sql(f"""
-                  with all_lineups as (
-                  SELECT *
-                  FROM read_parquet('{project_location}/eda/lineup_players.parquet')
-                  ),
-                  get_lineup_rank as (
-                  SELECT RANK_LINEUP, team_id, period, interval_start, interval_end,
-                   GK, BACKS, MIDFIELDERS, ATTACKING_MIDFIELDERS, DEFENDING_MIDFIELDERS, 
-                   FORWARDS, CENTER_FORWARDS, ATTACK_FORMATION, MIDFIELD_FORMATION, DEFENSE_FORMATION, OVERALL_FORMATION, PLAYERS_ON_PITCH
-                  FROM all_lineups al
-                  INNER JOIN read_parquet('{project_location}/eda/lineup_combinations.parquet') lc
-                        ON IFNULL(al.position_1, -1) = IFNULL(lc.position_1, -1)
-                        AND IFNULL(al.position_2, -1) = IFNULL(lc.position_2, -1)
-                        AND IFNULL(al.position_3, -1) = IFNULL(lc.position_3, -1)
-                        AND IFNULL(al.position_4, -1) = IFNULL(lc.position_4, -1)
-                        AND IFNULL(al.position_5, -1) = IFNULL(lc.position_5, -1) 
-                        AND IFNULL(al.position_6, -1) = IFNULL(lc.position_6, -1) 
-                        AND IFNULL(al.position_7, -1) = IFNULL(lc.position_7, -1) 
-                        AND IFNULL(al.position_8, -1) = IFNULL(lc.position_8, -1) 
-                        AND IFNULL(al.position_9, -1) = IFNULL(lc.position_9, -1) 
-                        AND IFNULL(al.position_10, -1) = IFNULL(lc.position_10, -1) 
-                        AND IFNULL(al.position_11, -1) = IFNULL(lc.position_11, -1)
-
-                  )
-
-                  SELECT lr.*, pl.player_id, country_id, pt.*
-                  FROM get_lineup_rank lr
-                  INNER JOIN read_parquet('{project_location}/eda/period_lineups.parquet')  pl
-                        ON lr.team_id = pl.team_id
-                        AND lr.period = pl.period
-                        AND lr.interval_start = pl.interval_start
-                        AND lr.interval_end = pl.interval_end
-                  LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
-                        ON pl.position_name = pt.position_name
-                           
-                                    
-                         
-
-                     """)#.write_csv('player_checks2.csv')
-
-print(test_query3)
-
-
-test_query4 = duckdb.sql(f"""
-
-                        SELECT *
-                        FROM read_parquet('{project_location}/eda/lineup_players.parquet')  pl
-
-
-                    """)
-
-print(test_query4)
-
-
-
-# test_query5 = duckdb.sql(f"""
-#                               with get_player_type as (
-#                               SELECT mi.*, player_id, 
-#                               CASE WHEN position_type = 'GK' THEN 1 ELSE 0 END AS GK,
-#                               CASE WHEN position_type = 'M' THEN 1 ELSE 0 END AS MIDFIELDERS,
-#                               CASE WHEN position_type = 'B' THEN 1 ELSE 0 END AS BACKS,
-#                               CASE WHEN position_type = 'F' THEN 1 ELSE 0 END AS FORWARDS,
-#                               CASE WHEN position_type = 'F' AND position_type_alt = 'CF' THEN 1 ELSE 0 END AS CENTER_FORWARDS,
-#                               CASE WHEN position_type = 'M' AND POSITION_BEHAVIOR = 'A' THEN 1 ELSE 0 END AS ATTACKING_MIDFIELDERS,
-#                               CASE WHEN position_type = 'M' AND POSITION_BEHAVIOR = 'D' THEN 1 ELSE 0 END AS DEFENDING_MIDFIELDERS
-#                               FROM read_parquet('{project_location}/eda/period_lineups.parquet')  mi
-#                               LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
-#                                  ON mi.position_name = pt.position_name
-#                               WHERE player_id IS NOT NULL
-#                               )
-#                               SELECT *
-#                               FROM get_player_type
+# test_query = duckdb.sql(f"""
+#                         SELECT *
+#                               FROM  read_parquet('{project_location}/eda/position_type.parquet') pt
 
 #                     """)
 
-# print(test_query5)
+# print(test_query)
+
+# test_query2 = duckdb.sql(f"""
+#                          with get_all_id as (
+#                         SELECT distinct match_id, team_id, period, interval_start, GROUP_ATTRIBUTE, GROUP_NAME, UNIT_GROUPING_RANK_ID
+#                          FROM read_parquet('{project_location}/eda/stack_lineup_groups.parquet')  st
+#                          LEFT JOIN read_parquet('{project_location}/eda/unique_player_combos.parquet') pc
+#                               ON IFNULL(st.position_1,-1) = IFNULL(pc.position_1,-1) 
+#                               AND IFNULL(st.position_2,-1) = IFNULL(pc.position_2,-1) 
+#                               AND IFNULL(st.position_3,-1) = IFNULL(pc.position_3,-1) 
+#                               AND IFNULL(st.position_4,-1) = IFNULL(pc.position_4,-1) 
+#                               AND IFNULL(st.position_5,-1) = IFNULL(pc.position_5,-1) 
+#                               AND IFNULL(st.position_6,-1) = IFNULL(pc.position_6,-1) 
+#                               AND IFNULL(st.position_7,-1) = IFNULL(pc.position_7,-1) 
+#                               AND IFNULL(st.position_8,-1) = IFNULL(pc.position_8,-1) 
+#                               AND IFNULL(st.position_9,-1) = IFNULL(pc.position_9,-1) 
+#                               AND IFNULL(st.position_10,-1) = IFNULL(pc.position_10,-1) 
+#                               AND IFNULL(st.position_11,-1) = IFNULL(pc.position_11,-1) 
+#                         ),
+#                         center_of_pitch as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID CENTER_POSITION_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'C'
+#                         ),
+#                         left_of_pitch as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID LEFT_POSITION_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'L'
+#                         ),
+#                         right_of_pitch as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID RIGHT_POSITION_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'R'
+#                         ),
+#                         forwards as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID FORWARDS_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'F'
+#                         ),
+#                         midfielders as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID MIDFIELDERS_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'M'
+#                         ),
+#                         backs as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID BACKS_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'B'
+#                         ),
+#                         gk as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID GK_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'GK'
+#                         ),
+#                         full_squad as (
+#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID FULL_SQUAD_GROUPING_ID
+#                         FROM get_all_id
+#                         WHERE GROUP_NAME = 'Full Squad'                     
+#                         )
+
+#                         SELECT get_id.*, CENTER_POSITION_GROUPING_ID, LEFT_POSITION_GROUPING_ID, RIGHT_POSITION_GROUPING_ID, FORWARDS_GROUPING_ID, MIDFIELDERS_GROUPING_ID, BACKS_GROUPING_ID, GK_GROUPING_ID, FULL_SQUAD_GROUPING_ID
+#                         FROM (SELECT distinct match_id, team_id, period, interval_start FROM get_all_id ) get_id
+#                         LEFT JOIN center_of_pitch
+#                               ON get_id.match_id = center_of_pitch.match_id
+#                               AND get_id.team_id = center_of_pitch.team_id
+#                               AND get_id.period = center_of_pitch.period
+#                               AND get_id.interval_start = center_of_pitch.interval_start
+#                         LEFT JOIN left_of_pitch
+#                               ON get_id.match_id = left_of_pitch.match_id
+#                               AND get_id.team_id = left_of_pitch.team_id
+#                               AND get_id.period = left_of_pitch.period
+#                               AND get_id.interval_start = left_of_pitch.interval_start
+#                         LEFT JOIN right_of_pitch
+#                               ON get_id.match_id = right_of_pitch.match_id
+#                               AND get_id.team_id = right_of_pitch.team_id
+#                               AND get_id.period = right_of_pitch.period
+#                               AND get_id.interval_start = right_of_pitch.interval_start
+#                         LEFT JOIN forwards
+#                               ON get_id.match_id = forwards.match_id
+#                               AND get_id.team_id = forwards.team_id
+#                               AND get_id.period = forwards.period
+#                               AND get_id.interval_start = forwards.interval_start
+#                         LEFT JOIN midfielders
+#                               ON get_id.match_id = midfielders.match_id
+#                               AND get_id.team_id = midfielders.team_id
+#                               AND get_id.period = midfielders.period
+#                               AND get_id.interval_start = midfielders.interval_start
+#                         LEFT JOIN backs
+#                               ON get_id.match_id = backs.match_id
+#                               AND get_id.team_id = backs.team_id
+#                               AND get_id.period = backs.period
+#                               AND get_id.interval_start = backs.interval_start
+#                         LEFT JOIN gk
+#                               ON get_id.match_id = gk.match_id
+#                               AND get_id.team_id = gk.team_id
+#                               AND get_id.period = gk.period
+#                               AND get_id.interval_start = gk.interval_start
+#                         LEFT JOIN full_squad
+#                               ON get_id.match_id = full_squad.match_id
+#                               AND get_id.team_id = full_squad.team_id
+#                               AND get_id.period = full_squad.period
+#                               AND get_id.interval_start = full_squad.interval_start
+#                     """)
+
+# print(test_query2)
+
+test_query3 = duckdb.sql(f"""
+                        SELECT *
+                              FROM  read_parquet('{project_location}/eda/stack_lineup_groups.parquet') pt
+
+                    """)
+
+print(test_query3)
