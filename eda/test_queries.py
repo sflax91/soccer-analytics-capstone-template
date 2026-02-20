@@ -7,13 +7,19 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
-# test_query = duckdb.sql(f"""
+# #test_query = 
+# duckdb.sql(f"""
 #                         SELECT *
-#                               FROM  read_parquet('{project_location}/eda/position_type.parquet') pt
-
-#                     """)
-
-# print(test_query)
+#                         --season, competition, is_youth, is_international, country_name, season_name, COUNT(distinct match_id)
+#                         --competition_stage, competition, match_status, match_week, home_team, home_team_id, home_managers, away_team_id, away_team, away_managers, stadium_id, referee_id, is_youth, is_international, country_name, season_name, COUNT(distinct match_id)
+#                               FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
+#                               WHERE match_id IN (SELECT match_id FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') )
+#                               AND competition IN ('1. Bundesliga', 'Indian Super league', 'La Liga', 'Ligue 1', 'Serie A', 'Premier League')
+#                         --GROUP BY season, competition, is_youth, is_international, country_name, season_name
+#                         --ORDER BY season, competition, is_youth, is_international, country_name, season_name
+#                         """
+#                         ).write_csv('match_investigate.csv')
+# #print(test_query)
 
 # test_query2 = duckdb.sql(f"""
 #                          with get_all_id as (
@@ -119,10 +125,14 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 # print(test_query2)
 
-test_query3 = duckdb.sql(f"""
-                        SELECT *
-                              FROM  read_parquet('{project_location}/eda/stack_lineup_groups.parquet') pt
+#test_query3 = 
+duckdb.sql(f"""
 
-                    """)
+                        SELECT country_name, COUNT(distinct player_id) players, COUNT(distinct match_id) matches
+                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') 
+                        GROUP BY country_name
+                        
 
-print(test_query3)
+                    """).write_csv('player_composition.csv')
+
+#print(test_query3)

@@ -228,11 +228,21 @@ duckdb.sql(f"""
                         
                         FROM get_player_position
                         )
-                        SELECT *
-                        FROM get_ranks
-                        ORDER BY match_id, team_id, period
+                        SELECT gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE,
+                        SUM(CASE WHEN gr.country_id = gr2.country_id THEN 1 ELSE 0 END) PLAYERS_SAME_COUNTRY,
+                        SUM(CASE WHEN gr.country_id != gr2.country_id THEN 1 ELSE 0 END) PLAYERS_DIFF_COUNTRY,
+                        SUM(CASE WHEN gr.POSITION_TYPE = gr2.POSITION_TYPE AND gr.country_id = gr2.country_id THEN 1 ELSE 0 END) POSITION_SAME_COUNTRY,
+                        SUM(CASE WHEN gr.POSITION_TYPE = gr2.POSITION_TYPE AND gr.country_id != gr2.country_id THEN 1 ELSE 0 END) POSITION_DIFF_COUNTRY,
+                        SUM(CASE WHEN gr.POSITION_SIDE_ADJ = gr2.POSITION_SIDE_ADJ AND gr.country_id = gr2.country_id THEN 1 ELSE 0 END) SIDE_SAME_COUNTRY,
+                        SUM(CASE WHEN gr.POSITION_SIDE_ADJ = gr2.POSITION_SIDE_ADJ AND gr.country_id != gr2.country_id THEN 1 ELSE 0 END) SIDE_DIFF_COUNTRY
 
-
-      
-
+                        FROM get_ranks gr
+                        LEFT JOIN get_ranks gr2
+                              ON gr.team_id = gr2.team_id
+                              AND gr.match_id = gr2.match_id
+                              AND gr.period = gr2.period
+                              AND gr.interval_start = gr2.interval_start
+                              AND gr.interval_end = gr2.interval_end
+                              AND gr.player_id != gr2.player_id
+                        GROUP BY gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE
                     """).write_parquet('period_lineups.parquet')
