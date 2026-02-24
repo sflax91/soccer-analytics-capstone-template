@@ -7,19 +7,13 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
-# #test_query = 
-# duckdb.sql(f"""
+# test_query = duckdb.sql(f"""
 #                         SELECT *
-#                         --season, competition, is_youth, is_international, country_name, season_name, COUNT(distinct match_id)
-#                         --competition_stage, competition, match_status, match_week, home_team, home_team_id, home_managers, away_team_id, away_team, away_managers, stadium_id, referee_id, is_youth, is_international, country_name, season_name, COUNT(distinct match_id)
-#                               FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
-#                               WHERE match_id IN (SELECT match_id FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') )
-#                               AND competition IN ('1. Bundesliga', 'Indian Super league', 'La Liga', 'Ligue 1', 'Serie A', 'Premier League')
-#                         --GROUP BY season, competition, is_youth, is_international, country_name, season_name
-#                         --ORDER BY season, competition, is_youth, is_international, country_name, season_name
+#                         FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
+
 #                         """
-#                         ).write_csv('match_investigate.csv')
-# #print(test_query)
+#                         )#.write_csv('match_investigate.csv')
+# print(test_query.columns)
 
 # test_query2 = duckdb.sql(f"""
 #                          with get_all_id as (
@@ -125,14 +119,89 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 # print(test_query2)
 
-#test_query3 = 
-duckdb.sql(f"""
+test_query3 = duckdb.sql(f"""
+                        with iso_goals as (
+                        SELECT e.match_id, id, index_num, period, timestamp, minute, second, duration,
+                         CASE WHEN team_id = home_team_id THEN 1 ELSE 0 END AS home_goal,
+                         CASE WHEN team_id = away_team_id THEN 1 ELSE 0 END AS away_goal
 
-                        SELECT country_name, COUNT(distinct player_id) players, COUNT(distinct match_id) matches
-                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') 
-                        GROUP BY country_name
-                        
+                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+                        LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') m
+                           ON e.match_id = m.match_id
+                        WHERE shot_outcome = 'Goal'
+                        ),
+                        rt_goals as (
+                        SELECT match_id, period, timestamp, minute, second, 
+                        SUM(home_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) home_rt,
+                        SUM(away_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) away_rt
+                        FROM iso_goals
+                        ),
+                        game_start as (
+                        SELECT *
+                        FROM (SELECT distinct match_id FROM iso_goals)
+                        CROSS JOIN (SELECT 1 period, '00:00:00.000' event_timestamp, 0 event_minute, 0 event_second, 0 home_rt, 0 away_rt)
+                        ),
+                        add_game_start as (
+                        SELECT match_id, period, timestamp, minute, second, home_rt, away_rt
+                        FROM rt_goals
 
-                    """).write_csv('player_composition.csv')
+                        UNION
 
-#print(test_query3)
+                        SELECT match_id, period, event_timestamp, event_minute, event_second, home_rt, away_rt
+                        FROM game_start
+                        ),
+                        lead_goal_events as (
+                        SELECT match_id, period start_period, timestamp start_timestamp, minute start_minute, second start_second, home_rt home_score, away_rt away_score,
+                        LEAD(period,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_period,
+                        LEAD(timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_timestamp,
+                        LEAD(minute,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_minute,
+                        LEAD(second,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_second
+                        FROM add_game_start
+                        ),
+                        create_half_splits as (
+                        SELECT distinct match_id, 2 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
+                        FROM lead_goal_events
+                        WHERE start_period < 2 AND end_period > 1
+
+                        UNION
+
+                        SELECT distinct match_id, 3 start_period, '00:00:00.000' event_timestamp, 90 event_minute, 0 event_second, home_score, away_score 
+                        FROM lead_goal_events
+                        WHERE start_period < 3 AND end_period > 2
+
+                        UNION
+
+                        SELECT distinct match_id, 4 start_period, '00:00:00.000' event_timestamp, 105 event_minute, 0 event_second, home_score, away_score 
+                        FROM lead_goal_events
+                        WHERE start_period < 4 AND end_period > 3
+
+                        UNION
+
+                        SELECT distinct match_id, 5 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
+                        FROM lead_goal_events
+                        WHERE start_period < 5 AND end_period > 4
+
+                        ),
+                        add_other_splits as (
+
+                        SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score
+                        FROM lead_goal_events
+
+                        UNION
+
+                        SELECT match_id, start_period, event_timestamp, event_minute, event_second, home_score, away_score
+                        FROM create_half_splits
+                        )
+                        SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score,
+                        LEAD(start_period,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_period,
+                        LEAD(start_timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_timestamp,
+                        LEAD(start_minute,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_minute,
+                        LEAD(start_second,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_second
+                        FROM add_other_splits
+
+
+
+
+                    """)#.write_csv('player_composition.csv')
+
+print(test_query3)
