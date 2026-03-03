@@ -100,7 +100,7 @@ y_coords = duckdb.sql(f"""
                       
 
                       with label_zones as (
-                        SELECT location_x, location_y,
+                        SELECT match_id, id, index_num, period, minute, second, timestamp, duration, player_id, team_id, possession_team_id, type, location_x, location_y,
                         CASE WHEN location_x <= 40 THEN 'L'
                         ELSE 'R'
                         END AS PITCH_ORIENTATION,
@@ -123,7 +123,8 @@ y_coords = duckdb.sql(f"""
                       END AS ZONE_LOCATION
                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
                         WHERE location_y IS NOT NULL AND match_id = 7542
-                        )
+                        ),
+                        add_prox_box as (
 
                         SELECT label_zones.*, 
                         CASE
@@ -139,9 +140,18 @@ y_coords = duckdb.sql(f"""
                         WHEN ZONE_LOCATION = '9' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(102, 19.885)) 
                         WHEN ZONE_LOCATION = '10' THEN 19.885 - location_y
                         ELSE NULL 
-                        END AS PROX_BOX
+                        END AS PROX_BOX, 
+                        CASE
+                        WHEN location_x <= 40 OR location_x > 80 THEN 'Outer'
+                        ELSE 'Middle'
+                        END AS PITCH_THIRD
 
                         FROM label_zones
- 
+
+                        )
+
+                        SELECT match_id, id, player_id, period, duration, team_id, possession_team_id, type, pitch_orientation, zone_location, prox_box, pitch_third
+                        FROM add_prox_box
+                        WHERE duration IS NOT NULL
                     """)
 print(y_coords)
