@@ -13,11 +13,11 @@ duckdb.sql(f"""
                         FROM read_parquet('{project_location}/eda/team_composition.parquet') 
                         ),
                         event_times as (
-                        SELECT id, match_id, period, strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_timestamp
+                        SELECT id, match_id, possession, period, strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_timestamp
                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
                         ),
                         final_query as (
-                        SELECT distinct et.id, et.match_id, --et.period, 
+                        SELECT distinct et.possession, et.match_id, et.period, 
                         --CASE WHEN home_team_id = lc.team_id THEN 'Home' WHEN away_team_id = lc.team_id THEN 'Away' ELSE NULL END AS HOME_AWAY, 
                         lc.team_id,
                         TEAM_COMPOSITION_PK
@@ -33,4 +33,4 @@ duckdb.sql(f"""
                         )
                         SELECT *
                         FROM final_query 
-                    """).write_parquet('find_event_players_on_pitch.parquet')
+                    """).write_parquet('possession_players_on_pitch.parquet')

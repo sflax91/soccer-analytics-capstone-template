@@ -237,7 +237,7 @@ y_coords = duckdb.sql(f"""
                         --WHERE duration IS NOT NULL
                         )
 
-                        SELECT match_id, id, player_id, period, team_id, 
+                        SELECT match_id, id, period, team_id, 
                         possession_team_id, DIST_TO_GOAL, 
                         GOAL_AREA_DIST, PROX_BOX, PITCH_THIRD,
                         CASE 
