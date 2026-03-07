@@ -347,7 +347,7 @@ duckdb.sql(f"""
 
                         progress_lr as (
 
-                        SELECT match_id, id, period, team_id, PITCH_ORIENTATION,
+                        SELECT match_id, id, period, team_id, location_x, location_y, PITCH_ORIENTATION,
                         possession_team_id, DIST_TO_GOAL, 
                         GOAL_AREA_DIST, PROX_BOX, --PITCH_THIRD,
                         CASE 
@@ -420,7 +420,9 @@ duckdb.sql(f"""
 
                         FROM check_shooting_side
 
-                        )
+                        ),
+
+                        event_zones as (
 
                         SELECT progress_lr.*,
                         CASE 
@@ -439,6 +441,29 @@ duckdb.sql(f"""
                         
                         ELSE NULL
 
-                        END AS THIRDS_ADVANCED
+                        END AS THIRDS_ADVANCED,
+
+                      CASE 
+                      WHEN location_y <= 81 AND location_y > 60 THEN 'T'
+                      WHEN location_y <= 60 AND location_y > 40 THEN 'U'
+                      WHEN location_y <= 40 AND location_y > 20 THEN 'U'
+                      WHEN location_y <= 20 THEN 'U'
+                      ELSE NULL
+                      END AS VERTICAL_BOX,
+
+                      CASE 
+                      WHEN location_x <= 16.5 THEN 'I'
+                      WHEN location_x >= 103.5 THEN 'I'
+                      WHEN location_x > 16.5 AND location_x <= 38.25 THEN 'M'
+                      WHEN location_x < 103.5 AND location_x >= 81.75 THEN 'M'
+                      WHEN location_x > 38.25 AND location_x <= 60 THEN 'O'
+                      WHEN location_x < 81.75 AND location_x >= 60 THEN 'O'
+                      ELSE NULL
+                      END AS HORIZONTAL_BOX
                         FROM progress_lr
+
+                    )
+                    SELECT match_id, id, period, team_id, possession_team_id, PITCH_THIRD_ADJ, PITCH_THIRD_END_ADJ, PROGRESS_TYPE, DISTANCE_TRAVELED, STARTING_DISTANCE_TO_GOAL_SHOOTING_ON, STARTING_DISTANCE_TO_GOAL_DEFENDING, PROGRESS_TO_GOAL_SHOOTING_ON, PROGRESS_TO_GOAL_DEFENDING,
+                            PITCH_ORIENTATION, DIST_TO_GOAL, GOAL_AREA_DIST, PROX_BOX, THIRDS_ADVANCED, VERTICAL_BOX || HORIZONTAL_BOX EVENT_ZONE_START  
+                    FROM event_zones
                     """).write_parquet('event_proximity.parquet')

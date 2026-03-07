@@ -1,5 +1,7 @@
 import duckdb
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 #IF NOT INSTALLED THEN INSTALL spatial
 
@@ -16,192 +18,279 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 # print(test_query.columns)
 
 # test_query2 = duckdb.sql(f"""
-#                          with get_all_id as (
-#                         SELECT distinct match_id, team_id, period, interval_start, GROUP_ATTRIBUTE, GROUP_NAME, UNIT_GROUPING_RANK_ID
-#                          FROM read_parquet('{project_location}/eda/stack_lineup_groups.parquet')  st
-#                          LEFT JOIN read_parquet('{project_location}/eda/unique_player_combos.parquet') pc
-#                               ON IFNULL(st.position_1,-1) = IFNULL(pc.position_1,-1) 
-#                               AND IFNULL(st.position_2,-1) = IFNULL(pc.position_2,-1) 
-#                               AND IFNULL(st.position_3,-1) = IFNULL(pc.position_3,-1) 
-#                               AND IFNULL(st.position_4,-1) = IFNULL(pc.position_4,-1) 
-#                               AND IFNULL(st.position_5,-1) = IFNULL(pc.position_5,-1) 
-#                               AND IFNULL(st.position_6,-1) = IFNULL(pc.position_6,-1) 
-#                               AND IFNULL(st.position_7,-1) = IFNULL(pc.position_7,-1) 
-#                               AND IFNULL(st.position_8,-1) = IFNULL(pc.position_8,-1) 
-#                               AND IFNULL(st.position_9,-1) = IFNULL(pc.position_9,-1) 
-#                               AND IFNULL(st.position_10,-1) = IFNULL(pc.position_10,-1) 
-#                               AND IFNULL(st.position_11,-1) = IFNULL(pc.position_11,-1) 
-#                         ),
-#                         center_of_pitch as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID CENTER_POSITION_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'C'
-#                         ),
-#                         left_of_pitch as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID LEFT_POSITION_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'L'
-#                         ),
-#                         right_of_pitch as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID RIGHT_POSITION_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Side' AND GROUP_ATTRIBUTE = 'R'
-#                         ),
-#                         forwards as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID FORWARDS_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'F'
-#                         ),
-#                         midfielders as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID MIDFIELDERS_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'M'
-#                         ),
-#                         backs as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID BACKS_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'B'
-#                         ),
-#                         gk as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID GK_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Position Type' AND GROUP_ATTRIBUTE = 'GK'
-#                         ),
-#                         full_squad as (
-#                         SELECT match_id, team_id, period, interval_start, UNIT_GROUPING_RANK_ID FULL_SQUAD_GROUPING_ID
-#                         FROM get_all_id
-#                         WHERE GROUP_NAME = 'Full Squad'                     
-#                         )
-
-#                         SELECT get_id.*, CENTER_POSITION_GROUPING_ID, LEFT_POSITION_GROUPING_ID, RIGHT_POSITION_GROUPING_ID, FORWARDS_GROUPING_ID, MIDFIELDERS_GROUPING_ID, BACKS_GROUPING_ID, GK_GROUPING_ID, FULL_SQUAD_GROUPING_ID
-#                         FROM (SELECT distinct match_id, team_id, period, interval_start FROM get_all_id ) get_id
-#                         LEFT JOIN center_of_pitch
-#                               ON get_id.match_id = center_of_pitch.match_id
-#                               AND get_id.team_id = center_of_pitch.team_id
-#                               AND get_id.period = center_of_pitch.period
-#                               AND get_id.interval_start = center_of_pitch.interval_start
-#                         LEFT JOIN left_of_pitch
-#                               ON get_id.match_id = left_of_pitch.match_id
-#                               AND get_id.team_id = left_of_pitch.team_id
-#                               AND get_id.period = left_of_pitch.period
-#                               AND get_id.interval_start = left_of_pitch.interval_start
-#                         LEFT JOIN right_of_pitch
-#                               ON get_id.match_id = right_of_pitch.match_id
-#                               AND get_id.team_id = right_of_pitch.team_id
-#                               AND get_id.period = right_of_pitch.period
-#                               AND get_id.interval_start = right_of_pitch.interval_start
-#                         LEFT JOIN forwards
-#                               ON get_id.match_id = forwards.match_id
-#                               AND get_id.team_id = forwards.team_id
-#                               AND get_id.period = forwards.period
-#                               AND get_id.interval_start = forwards.interval_start
-#                         LEFT JOIN midfielders
-#                               ON get_id.match_id = midfielders.match_id
-#                               AND get_id.team_id = midfielders.team_id
-#                               AND get_id.period = midfielders.period
-#                               AND get_id.interval_start = midfielders.interval_start
-#                         LEFT JOIN backs
-#                               ON get_id.match_id = backs.match_id
-#                               AND get_id.team_id = backs.team_id
-#                               AND get_id.period = backs.period
-#                               AND get_id.interval_start = backs.interval_start
-#                         LEFT JOIN gk
-#                               ON get_id.match_id = gk.match_id
-#                               AND get_id.team_id = gk.team_id
-#                               AND get_id.period = gk.period
-#                               AND get_id.interval_start = gk.interval_start
-#                         LEFT JOIN full_squad
-#                               ON get_id.match_id = full_squad.match_id
-#                               AND get_id.team_id = full_squad.team_id
-#                               AND get_id.period = full_squad.period
-#                               AND get_id.interval_start = full_squad.interval_start
+                        # SELECT FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE, AVG(shot_statsbomb_xg) avg_shot_statsbomb_xg, COUNT(id) number_of_shots, COUNT(match_id) number_of_matches
+                        # FROM get_shot_xg
+                        # GROUP BY FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE
+                        # ORDER BY AVG(shot_statsbomb_xg) DESC
 #                     """)
 
 # print(test_query2)
 
-test_query3 = duckdb.sql(f"""
-                        with iso_goals as (
-                        SELECT e.match_id, id, index_num, period, timestamp, minute, second, duration,
-                         CASE WHEN team_id = home_team_id THEN 1 ELSE 0 END AS home_goal,
-                         CASE WHEN team_id = away_team_id THEN 1 ELSE 0 END AS away_goal
+# x_coords = duckdb.sql(f"""
+#                         SELECT location_x
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         WHERE location_x IS NOT NULL --AND match_id = 7542
+ 
+#                     """).df()
 
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-                        LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') m
-                           ON e.match_id = m.match_id
-                        WHERE shot_outcome = 'Goal'
+# y_coords = duckdb.sql(f"""
+#                         SELECT location_y
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         WHERE location_y IS NOT NULL --AND match_id = 7542
+ 
+#                     """).df()
+#x_coords, y_coords = np.array(xy_coords).T
+
+
+#print(x_coords)
+
+#plt.scatter(x_coords, y_coords)
+#plt.savefig('another_test.png')
+
+
+# y_coords = duckdb.sql(f"""
+                      
+#                       SELECT distinct min_x, max_x, min_y, max_y
+#                       FROM (
+#                         SELECT match_id, MIN(round(location_x)) min_x, MAX(round(location_x)) max_x, MIN(round(location_y)) min_y, MAX(round(location_y)) max_y
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         WHERE location_y IS NOT NULL --AND match_id = 7542
+#                         GROUP BY match_id)
+ 
+#                     """)
+# print(y_coords)
+
+#x coords
+#0-18 left box
+#102-120 right box
+
+#y coords
+#40 +- (20.115)
+#60.115
+#19.885
+
+
+#left box
+
+#top left
+#(60.115, 0)
+#top right
+#(60.115, 18)
+#bottom left
+#(19.885, 0)
+#bottom right
+#(19.885, 18)
+
+
+#right box
+
+#top left
+#(60.115, 102)
+#top right
+#(60.115, 120)
+#bottom left
+#(19.885, 102)
+#bottom right
+#(19.885, 120)
+
+#halfway 60
+
+
+
+# y_coords = duckdb.sql(f"""
+#                         with carries as (
+#                         SELECT match_id, id, index_num, period, timestamp, duration, location_x, location_y, possession, possession_team_id, team_id, 
+#                          player_id, carry_end_location_x, carry_end_location_y
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+#                         WHERE carry_end_location_x IS NOT NULL AND match_id = 15946 
+#                         )
+
+#                         SELECT --carries.match_id, carries.period, duration, carries.possession, carries.possession_team_id, carries.team_id, 
+#                         player_id, PITCH_ORIENTATION, PITCH_THIRD_ADJ, 
+#                         PITCH_THIRD_END_ADJ, distance_traveled, progress_type, THIRDS_ADVANCED, STARTING_DISTANCE_TO_GOAL_SHOOTING_ON, STARTING_DISTANCE_TO_GOAL_DEFENDING, PROGRESS_TO_GOAL_SHOOTING_ON, PROGRESS_TO_GOAL_DEFENDING, EVENT_ZONE_START
+#                         FROM carries
+#                         LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
+#                           ON carries.match_id = ep.match_id
+#                           AND carries.id = ep.id
+#                           AND carries.period = ep.period
+
+                              
+
+
+ 
+#                     """)
+# print(y_coords)
+
+
+y_coords = duckdb.sql(f"""
+                        with e as (
+                        SELECT match_id, id, period, index_num, possession, possession_team_id, team_id
+                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                        WHERE location_x IS NOT NULL AND possession_team_id = team_id
+                        --AND match_id = 15946 
                         ),
-                        rt_goals as (
-                        SELECT match_id, period, timestamp, minute, second, 
-                        SUM(home_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) home_rt,
-                        SUM(away_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) away_rt
-                        FROM iso_goals
+                        label_zone as (
+                        SELECT e.*, EVENT_ZONE_START
+                        FROM e
+                         LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
+                           ON e.match_id = ep.match_id
+                           AND e.id = ep.id
+                           AND e.period = ep.period
                         ),
-                        game_start as (
-                        SELECT *
-                        FROM (SELECT distinct match_id FROM iso_goals)
-                        CROSS JOIN (SELECT 1 period, '00:00:00.000' event_timestamp, 0 event_minute, 0 event_second, 0 home_rt, 0 away_rt)
+                        zone_changes as (
+                        SELECT label_zone.*,
+                        CASE WHEN IFNULL(LAG(EVENT_ZONE_START,1) OVER (PARTITION BY match_id, period, possession, possession_team_id ORDER BY match_id, period, possession, index_num),'N/A') != IFNULL(EVENT_ZONE_START,'N/A') THEN 1
+                        ELSE 0
+                        END AS ZONE_CHANGE
+                        FROM label_zone
                         ),
-                        add_game_start as (
-                        SELECT match_id, period, timestamp, minute, second, home_rt, away_rt
-                        FROM rt_goals
-
-                        UNION
-
-                        SELECT match_id, period, event_timestamp, event_minute, event_second, home_rt, away_rt
-                        FROM game_start
-                        ),
-                        lead_goal_events as (
-                        SELECT match_id, period start_period, timestamp start_timestamp, minute start_minute, second start_second, home_rt home_score, away_rt away_score,
-                        LEAD(period,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_period,
-                        LEAD(timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_timestamp,
-                        LEAD(minute,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_minute,
-                        LEAD(second,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_second
-                        FROM add_game_start
-                        ),
-                        create_half_splits as (
-                        SELECT distinct match_id, 2 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
-                        FROM lead_goal_events
-                        WHERE start_period < 2 AND end_period > 1
-
-                        UNION
-
-                        SELECT distinct match_id, 3 start_period, '00:00:00.000' event_timestamp, 90 event_minute, 0 event_second, home_score, away_score 
-                        FROM lead_goal_events
-                        WHERE start_period < 3 AND end_period > 2
-
-                        UNION
-
-                        SELECT distinct match_id, 4 start_period, '00:00:00.000' event_timestamp, 105 event_minute, 0 event_second, home_score, away_score 
-                        FROM lead_goal_events
-                        WHERE start_period < 4 AND end_period > 3
-
-                        UNION
-
-                        SELECT distinct match_id, 5 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
-                        FROM lead_goal_events
-                        WHERE start_period < 5 AND end_period > 4
-
-                        ),
-                        add_other_splits as (
-
-                        SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score
-                        FROM lead_goal_events
-
-                        UNION
-
-                        SELECT match_id, start_period, event_timestamp, event_minute, event_second, home_score, away_score
-                        FROM create_half_splits
+                        iso_changes as (
+                        SELECT match_id, period, index_num, possession, possession_team_id, EVENT_ZONE_START
+                        FROM zone_changes
+                        WHERE ZONE_CHANGE = 1
                         )
-                        SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score,
-                        LEAD(start_period,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_period,
-                        LEAD(start_timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_timestamp,
-                        LEAD(start_minute,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_minute,
-                        LEAD(start_second,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_second
-                        FROM add_other_splits
+                        SELECT match_id, period, possession, COUNT(*) - 1 zone_hops,
+                        string_agg(EVENT_ZONE_START,'-' ORDER BY index_num) zones_hit
+                        FROM iso_changes
+                        GROUP BY match_id, period, possession
+                              
+
+
+ 
+                    """)
+print(y_coords)
+
+# test2 = duckdb.sql(f"""
+#                      LOAD spatial;
+                      
+
+#                       with shot_side as (
+#                      SELECT distinct match_id, period, team_id, possession_team_id, 
+#                       CASE WHEN location_x >= 60 THEN 'R'
+#                       ELSE 'L'
+#                       END AS SHOOTING_SIDE
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         WHERE type = 'Shot'
+#                         ),
+#                         bad_matches_shot_side as (
+#                         SELECT match_id
+#                         FROM shot_side
+#                         GROUP BY match_id, period, possession_team_id
+#                         HAVING IFNULL(COUNT(distinct SHOOTING_SIDE),0) != 1
+#                         ),
+                    
+#                     label_zones as (
+#                         SELECT match_id, id, index_num, period, minute, second, timestamp, duration, player_id, team_id, possession_team_id, type, location_x, location_y,
+#                         CASE WHEN location_x <= 40 THEN 'L'
+#                         ELSE 'R'
+#                         END AS PITCH_ORIENTATION,
+#                       CASE 
+#                       WHEN location_x <= 18 AND location_y >= 19.885 AND  location_y <= 60.115 THEN 'Box'
+#                       WHEN location_x <= 18 AND location_y > 60.115 THEN '1'
+#                       WHEN location_x > 18 AND location_x <= 60 AND location_y > 60.115 THEN '2'
+#                       WHEN location_x > 18 AND location_x <= 60 AND location_y <= 60.115 AND location_y >= 19.885 THEN '3'
+#                      WHEN location_x > 18 AND location_x <= 60 AND location_y < 19.885 THEN '4'
+#                      WHEN location_x <= 18 AND location_y < 60.885 THEN '5'
+                      
+#                       WHEN location_x >= 102 AND location_y >= 19.885 AND  location_y <= 60.115 THEN 'Box'
+#                       WHEN location_x >= 102 AND location_y > 60.115 THEN '6'
+#                       WHEN location_x < 102 AND location_x > 60 AND location_y > 60.115 THEN '7'
+#                       WHEN location_x < 102 AND location_x > 60 AND location_y <= 60.115 AND location_y >= 19.885 THEN '8'
+#                      WHEN location_x < 102 AND location_x > 60 AND location_y < 19.885 THEN '9'
+#                      WHEN location_x >= 102 AND location_y < 60.885 THEN '10'
+#                       ELSE NULL 
+#                       END AS ZONE_LOCATION,
+
+
+#                       CASE 
+#                       WHEN location_x <= 6 AND location_y >= 30.855 AND  location_y <= 49.125 THEN 'Goal Area'
+#                       WHEN location_x <= 6 AND location_y > 49.125 THEN '1'
+#                       WHEN location_x > 6 AND location_x <= 60 AND location_y > 49.125 THEN '2'
+#                       WHEN location_x > 6 AND location_x <= 60 AND location_y <= 49.125 AND location_y >= 30.855 THEN '3'
+#                      WHEN location_x > 6 AND location_x <= 60 AND location_y < 30.855 THEN '4'
+#                      WHEN location_x <= 6 AND location_y < 60.885 THEN '5'
+                      
+#                       WHEN location_x >= 114 AND location_y >= 30.855 AND  location_y <= 49.125 THEN 'Goal Area'
+#                       WHEN location_x >= 114 AND location_y > 49.125 THEN '6'
+#                       WHEN location_x < 114 AND location_x > 60 AND location_y > 49.125 THEN '7'
+#                       WHEN location_x < 114 AND location_x > 60 AND location_y <= 49.125 AND location_y >= 30.855 THEN '8'
+#                      WHEN location_x < 114 AND location_x > 60 AND location_y < 30.855 THEN '9'
+#                      WHEN location_x >= 114 AND location_y < 60.885 THEN '10'
+#                       ELSE NULL 
+#                       END AS ZONE_LOCATION_2,
+
+#                       CASE
+#                       WHEN location_x <= 60 AND location_y > 43.66 THEN '1'
+#                       WHEN location_x <= 60 AND location_y <= 43.66 AND location_y >= 36.34 THEN '2'
+#                       WHEN location_x <= 60 AND location_y < 36.34 THEN '3'
+
+#                       WHEN location_x > 60 AND location_y > 43.66 THEN '4'
+#                       WHEN location_x > 60 AND location_y <= 43.66 AND location_y >= 36.34 THEN '5'
+#                       WHEN location_x > 60 AND location_y < 36.34 THEN '6'
+#                       ELSE NULL
+#                       END AS ZONE_LOCATION_3
 
 
 
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         WHERE location_y IS NOT NULL AND match_id = 7542
+#                         ),
+#                         add_prox_box as (
 
-                    """)#.write_csv('player_composition.csv')
+#                         SELECT label_zones.*, 
+#                         CASE
+#                         WHEN ZONE_LOCATION = 'Box' THEN 0
+#                         WHEN ZONE_LOCATION = '1' THEN location_y - 60.115
+#                         WHEN ZONE_LOCATION = '2' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(12, 60.115)) 
+#                         WHEN ZONE_LOCATION = '3' THEN location_x - 18
+#                         WHEN ZONE_LOCATION = '4' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(12, 19.885)) 
+#                         WHEN ZONE_LOCATION = '5' THEN 19.885 - location_y
+#                         WHEN ZONE_LOCATION = '6' THEN location_y - 60.115
+#                         WHEN ZONE_LOCATION = '7' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(102, 60.115))  
+#                         WHEN ZONE_LOCATION = '8' THEN 102 - location_x
+#                         WHEN ZONE_LOCATION = '9' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(102, 19.885)) 
+#                         WHEN ZONE_LOCATION = '10' THEN 19.885 - location_y
+#                         ELSE NULL 
+#                         END AS PROX_BOX, 
+#                         CASE
+#                         WHEN ZONE_LOCATION_2 = 'Goal Area' THEN 0
+#                         WHEN ZONE_LOCATION_2 = '1' THEN location_y - 49.125
+#                         WHEN ZONE_LOCATION_2 = '2' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(6, 49.125)) 
+#                         WHEN ZONE_LOCATION_2 = '3' THEN location_x - 6
+#                         WHEN ZONE_LOCATION_2 = '4' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(6, 30.855)) 
+#                         WHEN ZONE_LOCATION_2 = '5' THEN 30.855 - location_y
+#                         WHEN ZONE_LOCATION_2 = '6' THEN location_y - 49.125
+#                         WHEN ZONE_LOCATION_2 = '7' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(114, 49.125)) 
+#                         WHEN ZONE_LOCATION_2 = '8' THEN 114 - location_x
+#                         WHEN ZONE_LOCATION_2 = '9' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(114, 30.855)) 
+#                         WHEN ZONE_LOCATION_2 = '10' THEN 30.855 - location_y
+#                         ELSE NULL 
+#                         END AS GOAL_AREA_DIST, 
 
-print(test_query3)
+#                         CASE
+#                         WHEN ZONE_LOCATION_3 = '1' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(0, 43.66)) 
+#                         WHEN ZONE_LOCATION_3 = '2' THEN location_x
+#                         WHEN ZONE_LOCATION_3 = '3' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(0, 36.34)) 
+
+#                         WHEN ZONE_LOCATION_3 = '4' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(120, 43.66)) 
+#                         WHEN ZONE_LOCATION_3 = '5' THEN 120 - location_x
+#                         WHEN ZONE_LOCATION_3 = '6' THEN ST_Distance(ST_Point(location_x, location_y), ST_Point(120, 36.34)) 
+
+#                         ELSE NULL
+#                         END AS DIST_TO_GOAL,
+
+#                         CASE
+#                         WHEN location_x <= 40 OR location_x > 80 THEN 'Outer'
+#                         ELSE 'Middle'
+#                         END AS PITCH_THIRD
+
+#                         FROM label_zones
+
+#                         )
+
+#                         SELECT match_id, id, location_x, location_y, ZONE_LOCATION, ZONE_LOCATION_2, ZONE_LOCATION_3, PROX_BOX, GOAL_AREA_DIST, DIST_TO_GOAL
+#                         FROM add_prox_box
+#                         WHERE GOAL_AREA_DIST < PROX_BOX
+
+#                                             """)
+# print(test2)
