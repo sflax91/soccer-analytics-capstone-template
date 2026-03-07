@@ -118,7 +118,7 @@ duckdb.sql(f"""
                         SELECT match_id, id, index_num, period, minute, second, timestamp, duration, player_id, team_id, possession_team_id, type, location_x, location_y, end_location_x, end_location_y,
                         CASE WHEN location_x <= 40 THEN 'L'
                         ELSE 'R'
-                        END AS PITCH_ORIENTATION, 
+                        END AS PITCH_ORIENTATION,
                       CASE 
                       WHEN location_x <= 18 AND location_y >= 19.885 AND  location_y <= 60.115 THEN 'Box'
                       WHEN location_x <= 18 AND location_y > 60.115 THEN '1'
@@ -229,8 +229,7 @@ duckdb.sql(f"""
                             FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
                             
                             ) e
-                        WHERE location_y IS NOT NULL --AND possession_team_id = team_id
-                        --AND match_id = 7542
+                        WHERE location_y IS NOT NULL --AND match_id = 7542
                         ),
                         add_prox_box as (
 
@@ -348,7 +347,7 @@ duckdb.sql(f"""
 
                         progress_lr as (
 
-                        SELECT match_id, id, period, team_id, location_x, location_y, PITCH_ORIENTATION, SHOOTING_SIDE,
+                        SELECT match_id, id, period, team_id, PITCH_ORIENTATION,
                         possession_team_id, DIST_TO_GOAL, 
                         GOAL_AREA_DIST, PROX_BOX, --PITCH_THIRD,
                         CASE 
@@ -364,8 +363,7 @@ duckdb.sql(f"""
 
                         ELSE NULL
 
-                        END AS PITCH_THIRD_ADJ, 
-                        DIST_TO_GOAL_END, GOAL_AREA_DIST_END, prox_box_END, --pitch_third_END,
+                        END AS PITCH_THIRD_ADJ, DIST_TO_GOAL_END, GOAL_AREA_DIST_END, prox_box_END, --pitch_third_END,
                         CASE 
                         WHEN PITCH_ORIENTATION = 'R' AND pitch_third_END = 'Outer' AND SHOOTING_SIDE = 'R' THEN 'Offensive Third'
                         WHEN PITCH_ORIENTATION = 'R' AND pitch_third_END = 'Outer' AND SHOOTING_SIDE = 'L' THEN 'Defensive Third'
@@ -422,9 +420,7 @@ duckdb.sql(f"""
 
                         FROM check_shooting_side
 
-                        ),
-
-                        event_zones as (
+                        )
 
                         SELECT progress_lr.*,
                         CASE 
@@ -443,54 +439,6 @@ duckdb.sql(f"""
                         
                         ELSE NULL
 
-                        END AS THIRDS_ADVANCED,
-
-                      CASE 
-                      WHEN SHOOTING_SIDE = 'L' AND location_y <= 81 AND location_y > 60 THEN 'OR'
-                      WHEN SHOOTING_SIDE = 'R' AND location_y <= 81 AND location_y > 60 THEN 'OL'
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_y <= 60 AND location_y > 40 THEN 'IR'
-                      WHEN SHOOTING_SIDE = 'R' AND location_y <= 60 AND location_y > 40 THEN 'IL'
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_y <= 40 AND location_y > 20 THEN 'IL'
-                      WHEN SHOOTING_SIDE = 'R' AND location_y <= 40 AND location_y > 20 THEN 'IR'
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_y <= 20 THEN 'OL'
-                      WHEN SHOOTING_SIDE = 'R' AND location_y <= 20 THEN 'OR'
-                      ELSE NULL
-                      END AS VERTICAL_BOX,
-
-                      CASE 
-                      WHEN SHOOTING_SIDE = 'L' AND location_x <= 16.5 THEN 'OB'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x <= 16.5 THEN 'DB'
-
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_x >= 103.5 THEN 'DB'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x >= 103.5 THEN 'OB'
-
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_x > 16.5 AND location_x <= 38.25 THEN 'OA'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x > 16.5 AND location_x <= 38.25 THEN 'DA'
-
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_x < 103.5 AND location_x >= 81.75 THEN 'DA'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x < 103.5 AND location_x >= 81.75 THEN 'OA'
-
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_x > 38.25 AND location_x <= 60 THEN 'OM'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x > 38.25 AND location_x <= 60 THEN 'DM'
-
-
-                      WHEN SHOOTING_SIDE = 'L' AND location_x < 81.75 AND location_x >= 60 THEN 'DM'
-                      WHEN SHOOTING_SIDE = 'R' AND location_x < 81.75 AND location_x >= 60 THEN 'OM'
-
-
-                      ELSE NULL
-                      END AS HORIZONTAL_BOX
+                        END AS THIRDS_ADVANCED
                         FROM progress_lr
-
-                    )
-                    SELECT match_id, id, period, team_id, possession_team_id, PITCH_THIRD_ADJ, PITCH_THIRD_END_ADJ, PROGRESS_TYPE, DISTANCE_TRAVELED, STARTING_DISTANCE_TO_GOAL_SHOOTING_ON, STARTING_DISTANCE_TO_GOAL_DEFENDING, PROGRESS_TO_GOAL_SHOOTING_ON, PROGRESS_TO_GOAL_DEFENDING,
-                            PITCH_ORIENTATION, DIST_TO_GOAL, GOAL_AREA_DIST, PROX_BOX, THIRDS_ADVANCED, HORIZONTAL_BOX || VERTICAL_BOX EVENT_ZONE_START  
-                    FROM event_zones
                     """).write_parquet('event_proximity.parquet')

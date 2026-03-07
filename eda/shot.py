@@ -18,7 +18,7 @@ duckdb.sql(f"""
                          CASE WHEN shot_redirect THEN 1 ELSE 0 END AS shot_redirect, 
                          CASE WHEN shot_saved_off_target THEN 1 ELSE 0 END AS shot_saved_off_target, 
                          CASE WHEN shot_saved_to_post THEN 1 ELSE 0 END AS shot_saved_to_post
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
                         WHERE shot_end_location_x IS NOT NULL
                                 """).write_parquet('shot.parquet')
 

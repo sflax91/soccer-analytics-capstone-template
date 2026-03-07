@@ -65,7 +65,9 @@ team_groups = duckdb.sql(f"""
                         WHERE GROUP_NAME = 'Full Squad'                     
                         )
 
-                        SELECT get_id.*, CENTER_POSITION_GROUPING_ID, LEFT_POSITION_GROUPING_ID, RIGHT_POSITION_GROUPING_ID, FORWARDS_GROUPING_ID, MIDFIELDERS_GROUPING_ID, BACKS_GROUPING_ID, GK_GROUPING_ID, FULL_SQUAD_GROUPING_ID
+                        SELECT get_id.*, CENTER_POSITION_GROUPING_ID, LEFT_POSITION_GROUPING_ID, RIGHT_POSITION_GROUPING_ID, 
+                        FORWARDS_GROUPING_ID, MIDFIELDERS_GROUPING_ID, BACKS_GROUPING_ID, GK_GROUPING_ID, FULL_SQUAD_GROUPING_ID,
+                        RANK() OVER (ORDER BY get_id.match_id, get_id.team_id, get_id.period, get_id.interval_start) TEAM_GROUPINGS_TIMELINE_PK
                         FROM (SELECT distinct match_id, team_id, period, interval_start, interval_end FROM get_all_id ) get_id
                         LEFT JOIN center_of_pitch
                               ON get_id.match_id = center_of_pitch.match_id
