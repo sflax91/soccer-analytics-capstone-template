@@ -96,58 +96,42 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #halfway 60
 
 duckdb.sql(f"""
-                      with shot_info as (
-                        SELECT e.match_id, --e.id, 
-                         --strptime('2026-01-01' , '%Y-%m-%d') start_date,
-                         --minute, second,
-                        strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_date,
-                         e.period, e.team_id, e.possession, --location_x, location_y, 
-                          --e.possession_team_id, --timestamp, duration, --location_x, location_y, 
-                         player_id, --shot_end_location_x, shot_end_location_y, shot_end_location_z, 
-                        shot_statsbomb_xg, shot_outcome, 
-                        shot_technique, 
-                         shot_body_part, shot_type, 
-                         CASE WHEN shot_first_time THEN 1 ELSE 0 END AS shot_first_time, 
-                         CASE WHEN shot_deflected THEN 1 ELSE 0 END AS shot_deflected, 
-                         CASE WHEN shot_aerial_won THEN 1 ELSE 0 END AS shot_aerial_won, 
-                         CASE WHEN shot_follows_dribble THEN 1 ELSE 0 END AS shot_follows_dribble, 
-                         CASE WHEN shot_one_on_one THEN 1 ELSE 0 END AS shot_one_on_one,
-                         CASE WHEN shot_open_goal THEN 1 ELSE 0 END AS shot_open_goal, 
-                         CASE WHEN shot_redirect THEN 1 ELSE 0 END AS shot_redirect, 
-                         CASE WHEN shot_saved_off_target THEN 1 ELSE 0 END AS shot_saved_off_target, 
-                         CASE WHEN shot_saved_to_post THEN 1 ELSE 0 END AS shot_saved_to_post, 
+                  with duel_events as (
+                     SELECT match_id, id, index_num, period, timestamp, duration, possession, possession_team_id, team_id, 
+                         player_id, 
+                        CASE WHEN duel_type = 'Tackle' THEN 1 ELSE 0 END AS tackles, 
+                        CASE WHEN duel_type = 'Aerial Lost' THEN 1 ELSE 0 END AS aerial_lost, 
+           
+                      CASE WHEN duel_outcome IN ('Lost In Play', 'Lost Out') OR duel_type = 'Aerial Lost' THEN 1 ELSE 0 END AS duels_lost,
+                      CASE WHEN duel_outcome IN ('Success In Play', 'Success Out', 'Won') THEN 1 ELSE 0 END AS duels_won,
 
-                        EVENT_ZONE_START OFF_ZONE, DIST_TO_GOAL
-                      
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-                        LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
-                           ON e.match_id = ep.match_id
-                           AND e.id = ep.id
-                           AND e.period = ep.period
-                          LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') m
-                            ON e.match_id = m.match_id
-                        WHERE shot_end_location_x IS NOT NULL
-                        --AND e.match_id = 15956
-                        ),
+
+                      strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_date
+                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                        WHERE duel_type IS NOT NULL
+                      ),
                         get_score as (
-                        SELECT shot_info.*, off_team.TEAM_COMPOSITION_PK OFF_TEAM_COMPOSITION_PK, def_team.TEAM_COMPOSITION_PK DEF_TEAM_COMPOSITION_PK,
+                        SELECT duel_events.*, EVENT_ZONE_START, EVENT_ZONE_END, off_team.TEAM_COMPOSITION_PK OFF_TEAM_COMPOSITION_PK, def_team.TEAM_COMPOSITION_PK DEF_TEAM_COMPOSITION_PK,
                         home_away.HOME_AWAY OFF_HOME_AWAY, home_away2.team_id DEF_TEAM_ID, home_away2.HOME_AWAY DEF_HOME_AWAY,
                         IFNULL(IFNULL(score_check1.home_score, score_check2.home_score), score_check3.home_score) home_score,
                         IFNULL(IFNULL(score_check1.away_score, score_check2.away_score), score_check3.away_score) away_score,
                         off_team.PLAYERS_ON_PITCH - def_team.PLAYERS_ON_PITCH player_advantage
-                        FROM shot_info
+                        FROM duel_events
+                        LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
+                              ON duel_events.match_id = ep.match_id
+                              AND duel_events.id = ep.id
                         LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') off_team
-                          ON shot_info.match_id = off_team.match_id
-                          AND shot_info.team_id = off_team.team_id
-                          AND shot_info.period = off_team.period
-                          AND shot_info.event_date >= off_team.interval_start
-                          AND shot_info.event_date < off_team.interval_end
+                          ON duel_events.match_id = off_team.match_id
+                          AND duel_events.team_id = off_team.team_id
+                          AND duel_events.period = off_team.period
+                          AND duel_events.event_date >= off_team.interval_start
+                          AND duel_events.event_date < off_team.interval_end
                         LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') def_team
-                          ON shot_info.match_id = def_team.match_id
-                          AND shot_info.team_id != def_team.team_id
-                          AND shot_info.period = def_team.period
-                          AND shot_info.event_date >= def_team.interval_start
-                          AND shot_info.event_date < def_team.interval_end
+                          ON duel_events.match_id = def_team.match_id
+                          AND duel_events.team_id != def_team.team_id
+                          AND duel_events.period = def_team.period
+                          AND duel_events.event_date >= def_team.interval_start
+                          AND duel_events.event_date < def_team.interval_end
                         LEFT JOIN (                        
                                     SELECT match_id, home_team_id team_id, 'H' HOME_AWAY
                                     FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
@@ -157,8 +141,8 @@ duckdb.sql(f"""
                                     SELECT match_id, away_team_id team_id, 'A' HOME_AWAY
                                     FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
                                     ) home_away
-                           ON shot_info.match_id = home_away.match_id 
-                           AND shot_info.team_id = home_away.team_id 
+                           ON duel_events.match_id = home_away.match_id 
+                           AND duel_events.team_id = home_away.team_id 
                           LEFT JOIN (                        
                                     SELECT match_id, home_team_id team_id, 'H' HOME_AWAY
                                     FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
@@ -168,8 +152,8 @@ duckdb.sql(f"""
                                     SELECT match_id, away_team_id team_id, 'A' HOME_AWAY
                                     FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
                                     ) home_away2
-                           ON shot_info.match_id = home_away2.match_id 
-                           AND shot_info.team_id != home_away2.team_id 
+                           ON duel_events.match_id = home_away2.match_id 
+                           AND duel_events.team_id != home_away2.team_id 
 
                            LEFT JOIN (
                                     SELECT match_id, start_period, end_period, home_score, away_score, 
@@ -181,10 +165,10 @@ duckdb.sql(f"""
                                     FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
                                     WHERE start_period = end_period AND end_period IS NOT NULL
                                     ) score_check1
-                            ON shot_info.match_id = score_check1.match_id
-                            AND shot_info.period = score_check1.start_period
-                            AND shot_info.event_date >= score_check1.SCORE_TL_START
-                            AND shot_info.event_date < score_check1.SCORE_TL_END
+                            ON duel_events.match_id = score_check1.match_id
+                            AND duel_events.period = score_check1.start_period
+                            AND duel_events.event_date >= score_check1.SCORE_TL_START
+                            AND duel_events.event_date < score_check1.SCORE_TL_END
 
 
                            LEFT JOIN (
@@ -197,13 +181,13 @@ duckdb.sql(f"""
                                     FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
                                     WHERE start_period != end_period AND end_period IS NOT NULL
                                     ) score_check2
-                            ON shot_info.match_id = score_check2.match_id
+                            ON duel_events.match_id = score_check2.match_id
                             AND (
-                                  (shot_info.period = score_check2.start_period AND shot_info.event_date >= score_check2.SCORE_TL_START)
+                                  (duel_events.period = score_check2.start_period AND duel_events.event_date >= score_check2.SCORE_TL_START)
                                   OR 
-                                  (shot_info.period = score_check2.end_period AND shot_info.event_date < IFNULL(score_check2.SCORE_TL_END, strptime('2027-01-01' , '%Y-%m-%d')))
+                                  (duel_events.period = score_check2.end_period AND duel_events.event_date < IFNULL(score_check2.SCORE_TL_END, strptime('2027-01-01' , '%Y-%m-%d')))
                                   OR 
-                                  (shot_info.period > score_check2.start_period AND shot_info.period < score_check2.end_period)
+                                  (duel_events.period > score_check2.start_period AND duel_events.period < score_check2.end_period)
                                   )
 
                              LEFT JOIN (
@@ -216,15 +200,15 @@ duckdb.sql(f"""
                                     FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
                                     WHERE end_period IS NULL
                                     ) score_check3
-                            ON shot_info.match_id = score_check3.match_id
+                            ON duel_events.match_id = score_check3.match_id
                             AND (
-                                  (shot_info.period = score_check3.start_period AND shot_info.event_date >= score_check3.SCORE_TL_START)
+                                  (duel_events.period = score_check3.start_period AND duel_events.event_date >= score_check3.SCORE_TL_START)
                                   OR 
-                                  (shot_info.period > score_check3.start_period)
+                                  (duel_events.period > score_check3.start_period)
                                   )
                         )
 
                         SELECT get_score.*, 
                         CASE WHEN OFF_HOME_AWAY = 'H' THEN home_score - away_score ELSE away_score - home_score END AS goal_diff,
                         FROM get_score
-                    """).write_parquet('shot_level_stats.parquet')
+                    """).write_parquet('duel_level_stats.parquet')

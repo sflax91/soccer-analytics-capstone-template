@@ -348,7 +348,7 @@ duckdb.sql(f"""
 
                         progress_lr as (
 
-                        SELECT match_id, id, period, team_id, location_x, location_y, PITCH_ORIENTATION, SHOOTING_SIDE,
+                        SELECT match_id, id, period, team_id, location_x, location_y, end_location_x, end_location_y, PITCH_ORIENTATION, SHOOTING_SIDE,
                         possession_team_id, DIST_TO_GOAL, 
                         GOAL_AREA_DIST, PROX_BOX, --PITCH_THIRD,
                         CASE 
@@ -486,11 +486,61 @@ duckdb.sql(f"""
 
 
                       ELSE NULL
-                      END AS HORIZONTAL_BOX
+                      END AS HORIZONTAL_BOX,
+
+
+
+
+
+
+                      CASE 
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_y <= 81 AND end_location_y > 60 THEN 'OR'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_y <= 81 AND end_location_y > 60 THEN 'OL'
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_y <= 60 AND end_location_y > 40 THEN 'IR'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_y <= 60 AND end_location_y > 40 THEN 'IL'
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_y <= 40 AND end_location_y > 20 THEN 'IL'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_y <= 40 AND end_location_y > 20 THEN 'IR'
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_y <= 20 THEN 'OL'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_y <= 20 THEN 'OR'
+                      ELSE NULL
+                      END AS VERTICAL_BOX_END,
+
+                      CASE 
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x <= 16.5 THEN 'OB'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x <= 16.5 THEN 'DB'
+
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x >= 103.5 THEN 'DB'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x >= 103.5 THEN 'OB'
+
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x > 16.5 AND end_location_x <= 38.25 THEN 'OA'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x > 16.5 AND end_location_x <= 38.25 THEN 'DA'
+
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x < 103.5 AND end_location_x >= 81.75 THEN 'DA'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x < 103.5 AND end_location_x >= 81.75 THEN 'OA'
+
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x > 38.25 AND end_location_x <= 60 THEN 'OM'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x > 38.25 AND end_location_x <= 60 THEN 'DM'
+
+
+                      WHEN SHOOTING_SIDE = 'L' AND end_location_x < 81.75 AND end_location_x >= 60 THEN 'DM'
+                      WHEN SHOOTING_SIDE = 'R' AND end_location_x < 81.75 AND end_location_x >= 60 THEN 'OM'
+
+
+                      ELSE NULL
+                      END AS HORIZONTAL_BOX_END
+
+
                         FROM progress_lr
 
                     )
                     SELECT match_id, id, period, team_id, possession_team_id, PITCH_THIRD_ADJ, PITCH_THIRD_END_ADJ, PROGRESS_TYPE, DISTANCE_TRAVELED, STARTING_DISTANCE_TO_GOAL_SHOOTING_ON, STARTING_DISTANCE_TO_GOAL_DEFENDING, PROGRESS_TO_GOAL_SHOOTING_ON, PROGRESS_TO_GOAL_DEFENDING,
-                            PITCH_ORIENTATION, DIST_TO_GOAL, GOAL_AREA_DIST, PROX_BOX, THIRDS_ADVANCED, HORIZONTAL_BOX || VERTICAL_BOX EVENT_ZONE_START  
+                            PITCH_ORIENTATION, DIST_TO_GOAL, GOAL_AREA_DIST, PROX_BOX, THIRDS_ADVANCED, HORIZONTAL_BOX || VERTICAL_BOX EVENT_ZONE_START , HORIZONTAL_BOX_END || VERTICAL_BOX_END EVENT_ZONE_END
                     FROM event_zones
                     """).write_parquet('event_proximity.parquet')
