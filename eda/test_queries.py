@@ -103,20 +103,172 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 # print(y_coords)
 
 
-y_coords = duckdb.sql(f"""
+# y_coords = duckdb.sql(f"""
                       
-                      SELECT match_id, --period, --possession, 
-                      possession_team_id, team_id, --OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK, 
-                      player_advantage, goal_diff,
-                      COUNT(distinct player_id) players_passing, COUNT(distinct player_id) players_receiving_passes, AVG(pass_length) avg_pass_length, MAX(pass_length) max_pass_length,
-                      SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, SUM(pass_cross) pass_cross, SUM(pass_switch) pass_switch,
-                      SUM(pass_through_ball) pass_through_ball, SUM(pass_aerial_won) pass_aerial_won, SUM(pass_deflected) pass_deflected,  SUM(pass_inswinging) pass_inswinging,
-                      SUM(pass_outswinging) pass_outswinging, SUM(pass_no_touch) pass_no_touch, SUM(pass_cut_back) pass_cut_back, SUM(pass_straight) pass_straight, 
-                      SUM(pass_miscommunication) pass_miscommunication
-                      FROM read_parquet('{project_location}/eda/pass_level_stats.parquet')
-                      WHERE possession_team_id = team_id
-                      GROUP BY match_id, --period, --possession, 
-                      possession_team_id, team_id, --OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK, 
-                      player_advantage, goal_diff
+#                       SELECT match_id, --period, --possession, 
+#                       possession_team_id, --team_id, --OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK, 
+#                       --player_advantage, goal_diff,
+#                       --COUNT(distinct player_id) players_passing, COUNT(distinct player_id) players_receiving_passes, 
+#                       AVG(pass_length) avg_pass_length, MAX(pass_length) max_pass_length,
+#                       SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, SUM(pass_cross) pass_cross, SUM(pass_switch) pass_switch,
+#                       SUM(pass_through_ball) pass_through_ball, SUM(pass_aerial_won) pass_aerial_won, SUM(pass_deflected) pass_deflected,  SUM(pass_inswinging) pass_inswinging,
+#                       SUM(pass_outswinging) pass_outswinging, SUM(pass_no_touch) pass_no_touch, SUM(pass_cut_back) pass_cut_back, SUM(pass_straight) pass_straight, 
+#                       SUM(pass_miscommunication) pass_miscommunication
+#                       FROM read_parquet('{project_location}/eda/pass_level_stats.parquet')
+#                       WHERE possession_team_id = team_id
+#                       GROUP BY match_id, --period, --possession, 
+#                       possession_team_id--, --team_id, 
+#                       --OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK--, 
+#                       --player_advantage, goal_diff
+#                      """)
+# print(y_coords)
+
+# y_coords = duckdb.sql(f"""
+#                         with half_timestamps as (
+#                               SELECT match_id, team_id, period, minute, second, timestamp, start_date + TO_MINUTES(minute) + TO_SECONDS(second) period_timestamp, type
+#                               FROM (SELECT distinct match_id, team_id, period, minute, second, timestamp, strptime('2026-01-01' , '%Y-%m-%d') start_date, type
+#                                     FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
+#                                     WHERE type IN ('Half End', 'Half Start')
+#                                     ),
+#                         iso_goals as (
+#                         SELECT e.match_id, id, index_num, period, timestamp, minute, second, duration,
+#                          CASE WHEN team_id = home_team_id THEN 1 ELSE 0 END AS home_goal,
+#                          CASE WHEN team_id = away_team_id THEN 1 ELSE 0 END AS away_goal
+
+#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+#                         LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') m
+#                            ON e.match_id = m.match_id
+#                         WHERE shot_outcome = 'Goal'
+#                         ),
+#                         rt_goals as (
+#                         SELECT match_id, period, timestamp, minute, second, 
+#                         SUM(home_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) home_rt,
+#                         SUM(away_goal) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) away_rt
+#                         FROM iso_goals
+#                         ),
+#                         game_start as (
+#                         SELECT *
+#                         FROM (SELECT distinct match_id FROM iso_goals)
+#                         CROSS JOIN (SELECT 1 period, '00:00:00.000' event_timestamp, 0 event_minute, 0 event_second, 0 home_rt, 0 away_rt)
+#                         ),
+#                         add_game_start as (
+#                         SELECT match_id, period, timestamp, minute, second, home_rt, away_rt
+#                         FROM rt_goals
+
+#                         UNION
+
+#                         SELECT match_id, period, event_timestamp, event_minute, event_second, home_rt, away_rt
+#                         FROM game_start
+#                         ),
+#                         lead_goal_events as (
+#                         SELECT match_id, period start_period, timestamp start_timestamp, minute start_minute, second start_second, home_rt home_score, away_rt away_score,
+#                         LEAD(period,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_period,
+#                         LEAD(timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_timestamp,
+#                         LEAD(minute,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_minute,
+#                         LEAD(second,1) OVER (PARTITION BY match_id ORDER BY match_id, period, minute, second) end_second
+#                         FROM add_game_start
+#                         ),
+#                         create_half_splits as (
+#                         SELECT distinct match_id, 2 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
+#                         FROM lead_goal_events
+#                         WHERE start_period < 2 AND end_period > 1
+
+#                         UNION
+
+#                         SELECT distinct match_id, 3 start_period, '00:00:00.000' event_timestamp, 90 event_minute, 0 event_second, home_score, away_score 
+#                         FROM lead_goal_events
+#                         WHERE start_period < 3 AND end_period > 2
+
+#                         UNION
+
+#                         SELECT distinct match_id, 4 start_period, '00:00:00.000' event_timestamp, 105 event_minute, 0 event_second, home_score, away_score 
+#                         FROM lead_goal_events
+#                         WHERE start_period < 4 AND end_period > 3
+
+#                         UNION
+
+#                         SELECT distinct match_id, 5 start_period, '00:00:00.000' event_timestamp, 45 event_minute, 0 event_second, home_score, away_score 
+#                         FROM lead_goal_events
+#                         WHERE start_period < 5 AND end_period > 4
+
+#                         ),
+#                         add_other_splits as (
+
+#                         SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score
+#                         FROM lead_goal_events
+
+#                         UNION
+
+#                         SELECT match_id, start_period, event_timestamp, event_minute, event_second, home_score, away_score
+#                         FROM create_half_splits
+#                         )
+#                         SELECT match_id, start_period, start_timestamp, start_minute, start_second, home_score, away_score,
+#                         LEAD(start_period,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_period,
+#                         LEAD(start_timestamp,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_timestamp,
+#                         LEAD(start_minute,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_minute,
+#                         LEAD(start_second,1) OVER (PARTITION BY match_id ORDER BY match_id, start_period, start_minute, start_second) end_second
+#                         FROM add_other_splits              
+#                      """)
+# print(y_coords)
+
+
+y_coords = duckdb.sql(f"""
+                      with score_info as (
+                       SELECT match_id, period, start_date, end_date, home_goals, away_goals
+                       FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
+                       ),
+                       track_times as (
+                       SELECT match_id, period, interval_start
+                       FROM read_parquet('{project_location}/eda/period_lineups.parquet')
+
+                       UNION
+
+                       SELECT match_id, period, start_date
+                       FROM score_info
+                       ),
+                       id_changes as (
+                       SELECT track_times.*, home_goals, away_goals, player_id, country_id, POSITION_SIDE_ADJ, POSITION_TYPE, POSITION_TYPE_ALT, POSITION_BEHAVIOR, PLAYERS_SAME_COUNTRY, 
+                       PLAYERS_DIFF_COUNTRY, POSITION_SAME_COUNTRY, POSITION_DIFF_COUNTRY, SIDE_SAME_COUNTRY, SIDE_DIFF_COUNTRY,
+
+                       CASE
+                       WHEN IFNULL(LAG(track_times.period,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != track_times.period THEN 1
+                       WHEN IFNULL(LAG(home_goals,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != home_goals THEN 1
+                       WHEN IFNULL(LAG(away_goals,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != away_goals THEN 1
+                       WHEN IFNULL(LAG(POSITION_SIDE_ADJ,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),'N/A') != POSITION_SIDE_ADJ THEN 1
+                       WHEN IFNULL(LAG(POSITION_TYPE,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),'N/A') != POSITION_TYPE THEN 1
+                       WHEN IFNULL(LAG(POSITION_TYPE_ALT,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),'N/A') != POSITION_TYPE_ALT THEN 1
+                       WHEN IFNULL(LAG(POSITION_BEHAVIOR,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),'N/A') != POSITION_BEHAVIOR THEN 1
+                       WHEN IFNULL(LAG(PLAYERS_SAME_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != PLAYERS_SAME_COUNTRY THEN 1
+                       WHEN IFNULL(LAG(PLAYERS_DIFF_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != PLAYERS_DIFF_COUNTRY THEN 1
+                       WHEN IFNULL(LAG(POSITION_SAME_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != POSITION_SAME_COUNTRY THEN 1
+                       WHEN IFNULL(LAG(POSITION_DIFF_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != POSITION_DIFF_COUNTRY THEN 1
+                       WHEN IFNULL(LAG(SIDE_SAME_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != SIDE_SAME_COUNTRY THEN 1
+                       WHEN IFNULL(LAG(SIDE_DIFF_COUNTRY,1) OVER (PARTITION BY track_times.match_id, track_times.period, player_id ORDER BY track_times.match_id, track_times.period, player_id, track_times.interval_start),-1) != SIDE_DIFF_COUNTRY THEN 1
+                       ELSE 0
+                       END AS iso_row
+                       FROM track_times
+                       LEFT JOIN score_info
+                        ON track_times.match_id = score_info.match_id
+                        AND track_times.period = score_info.period
+                        AND track_times.interval_start >= score_info.start_date
+                        AND track_times.interval_start < IFNULL(score_info.end_date, TODAY())
+                        LEFT JOIN read_parquet('{project_location}/eda/period_lineups.parquet') pl
+                        ON track_times.match_id = pl.match_id
+                        AND track_times.period = pl.period
+                        AND track_times.interval_start >= pl.interval_start
+                        AND track_times.interval_start < IFNULL(pl.interval_end, TODAY())
+                        )
+
+                        SELECT iso_changes.*, LEAD(interval_start) OVER (PARTITION BY match_id, period, player_id ORDER BY match_id, period, player_id, interval_start) interval_end
+                        FROM (
+                        SELECT match_id, period, home_goals, away_goals, player_id, country_id, POSITION_SIDE_ADJ, POSITION_TYPE, POSITION_TYPE_ALT, POSITION_BEHAVIOR, PLAYERS_SAME_COUNTRY, 
+                       PLAYERS_DIFF_COUNTRY, POSITION_SAME_COUNTRY, POSITION_DIFF_COUNTRY, SIDE_SAME_COUNTRY, SIDE_DIFF_COUNTRY, interval_start
+                       FROM id_changes
+                       WHERE iso_row = 1
+                       ) iso_changes
+
+                       ORDER BY match_id, period, player_id, interval_start
+
+
                      """)
 print(y_coords)
