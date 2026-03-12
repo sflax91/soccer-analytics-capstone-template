@@ -97,7 +97,9 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 duckdb.sql(f"""
                   with pass_events as (
-                        SELECT match_id, id, index_num, period, timestamp, duration, --location_x, location_y, 
+                        SELECT match_id, id, 
+                        --index_num, 
+                      period, --timestamp, duration, --location_x, location_y, 
                         possession, possession_team_id, team_id, 
                          player_id, --pass_end_location_x, pass_end_location_y, 
                         pass_recipient_id, pass_length, pass_angle, pass_height, pass_body_part, pass_type, pass_outcome,
@@ -122,9 +124,15 @@ duckdb.sql(f"""
                         get_score as (
                         SELECT pass_events.*, EVENT_ZONE_START, EVENT_ZONE_END, off_team.TEAM_COMPOSITION_PK OFF_TEAM_COMPOSITION_PK, def_team.TEAM_COMPOSITION_PK DEF_TEAM_COMPOSITION_PK,
                         home_away.HOME_AWAY OFF_HOME_AWAY, home_away2.team_id DEF_TEAM_ID, home_away2.HOME_AWAY DEF_HOME_AWAY,
-                        IFNULL(IFNULL(score_check1.home_score, score_check2.home_score), score_check3.home_score) home_score,
-                        IFNULL(IFNULL(score_check1.away_score, score_check2.away_score), score_check3.away_score) away_score,
-                        off_team.PLAYERS_ON_PITCH - def_team.PLAYERS_ON_PITCH player_advantage
+                        score_check1.home_score,
+                        score_check1.away_score,
+                        off_team.PLAYERS_ON_PITCH - def_team.PLAYERS_ON_PITCH player_advantage,
+                        CASE
+                        WHEN POSITION_TYPE = 'F' THEN off_team.FORWARDS_GROUPING_ID
+                        WHEN POSITION_TYPE = 'M' THEN off_team.MIDFIELDERS_GROUPING_ID
+                        WHEN POSITION_TYPE = 'B' THEN off_team.BACKS_GROUPING_ID
+                        ELSE NULL
+                        END AS PLAYER_GROUPING_ID
                         FROM pass_events
                         LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
                               ON pass_events.match_id = ep.match_id
@@ -165,59 +173,48 @@ duckdb.sql(f"""
                            AND pass_events.team_id != home_away2.team_id 
 
                            LEFT JOIN (
-                                    SELECT match_id, start_period, end_period, home_score, away_score, 
-                                    strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(start_minute) + TO_SECONDS(start_second) SCORE_TL_START,
-                                    CASE
-                                    WHEN end_minute IS NULL THEN NULL
-                                    ELSE strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(end_minute) + TO_SECONDS(end_second) 
-                                    END AS SCORE_TL_END
+                                    SELECT match_id, period, home_goals home_score, away_goals away_score, 
+                                    start_date,
+                                    end_date
                                     FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
-                                    WHERE start_period = end_period AND end_period IS NOT NULL
                                     ) score_check1
                             ON pass_events.match_id = score_check1.match_id
-                            AND pass_events.period = score_check1.start_period
-                            AND pass_events.event_date >= score_check1.SCORE_TL_START
-                            AND pass_events.event_date < score_check1.SCORE_TL_END
+                            AND pass_events.period = score_check1.period
+                            AND pass_events.event_date >= score_check1.start_date
+                            AND pass_events.event_date < score_check1.end_date
+                          LEFT JOIN read_parquet('{project_location}/eda/period_lineups.parquet') pl
+                            ON pass_events.match_id = pl.match_id
+                            AND pass_events.period = pl.period
+                            AND pass_events.player_id = pl.player_id
+                            AND pass_events.event_date >= pl.interval_start
+                            AND pass_events.event_date < pl.interval_end
 
-
-                           LEFT JOIN (
-                                    SELECT match_id, start_period, end_period, home_score, away_score, 
-                                    strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(start_minute) + TO_SECONDS(start_second) SCORE_TL_START,
-                                    CASE
-                                    WHEN end_minute IS NULL THEN NULL
-                                    ELSE strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(end_minute) + TO_SECONDS(end_second) 
-                                    END AS SCORE_TL_END
-                                    FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
-                                    WHERE start_period != end_period AND end_period IS NOT NULL
-                                    ) score_check2
-                            ON pass_events.match_id = score_check2.match_id
-                            AND (
-                                  (pass_events.period = score_check2.start_period AND pass_events.event_date >= score_check2.SCORE_TL_START)
-                                  OR 
-                                  (pass_events.period = score_check2.end_period AND pass_events.event_date < IFNULL(score_check2.SCORE_TL_END, strptime('2027-01-01' , '%Y-%m-%d')))
-                                  OR 
-                                  (pass_events.period > score_check2.start_period AND pass_events.period < score_check2.end_period)
-                                  )
-
-                             LEFT JOIN (
-                                    SELECT match_id, start_period, end_period, home_score, away_score, 
-                                    strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(start_minute) + TO_SECONDS(start_second) SCORE_TL_START,
-                                    CASE
-                                    WHEN end_minute IS NULL THEN NULL
-                                    ELSE strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(end_minute) + TO_SECONDS(end_second) 
-                                    END AS SCORE_TL_END
-                                    FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
-                                    WHERE end_period IS NULL
-                                    ) score_check3
-                            ON pass_events.match_id = score_check3.match_id
-                            AND (
-                                  (pass_events.period = score_check3.start_period AND pass_events.event_date >= score_check3.SCORE_TL_START)
-                                  OR 
-                                  (pass_events.period > score_check3.start_period)
-                                  )
-                        )
-
+                        ),
+                        goal_diff_calc as (
                         SELECT get_score.*, 
                         CASE WHEN OFF_HOME_AWAY = 'H' THEN home_score - away_score ELSE away_score - home_score END AS goal_diff,
                         FROM get_score
+                        )
+                        SELECT match_id, period, possession, possession_team_id, team_id, player_id, pass_recipient_id, EVENT_ZONE_START, EVENT_ZONE_END, OFF_TEAM_COMPOSITION_PK, 
+                        DEF_TEAM_COMPOSITION_PK, OFF_HOME_AWAY, DEF_TEAM_ID, DEF_HOME_AWAY, home_score, away_score, player_advantage, PLAYER_GROUPING_ID, goal_diff, pass_height,
+                        --'pass_angle', 'pass_type', 'pass_outcome', 'pass_technique', 'pass_length',
+                         
+                        SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, 
+                        SUM(CASE WHEN pass_outcome IS NULL THEN pass_cross ELSE 0 END) pass_cross_success, 
+                        SUM(CASE WHEN pass_outcome IS NOT NULL THEN pass_cross ELSE 0 END) pass_cross_fail,
+                        SUM(pass_switch) pass_switch, 
+                        SUM(CASE WHEN pass_outcome IS NULL THEN pass_through_ball ELSE 0 END) pass_through_ball_success, 
+                        SUM(CASE WHEN pass_outcome IS NOT NULL THEN pass_through_ball ELSE 0 END) pass_through_ball_fail, 
+                        SUM(pass_aerial_won) pass_aerial_won, 
+                        SUM(pass_deflected) pass_deflected, 
+                        SUM(pass_inswinging) pass_inswinging, 
+                        SUM(pass_outswinging) pass_outswinging, 
+                        SUM(pass_no_touch) pass_no_touch, SUM(pass_cut_back) pass_cut_back, SUM(pass_straight) pass_straight, SUM(pass_miscommunication) pass_miscommunication,
+                        SUM(CASE WHEN pass_outcome IS NOT NULL THEN 1 ELSE 0 END) pass_success,
+                        COUNT(*) pass_attempt
+                        
+                        FROM goal_diff_calc
+
+                        GROUP BY match_id, period, possession, possession_team_id, team_id, player_id, pass_recipient_id, EVENT_ZONE_START, EVENT_ZONE_END, OFF_TEAM_COMPOSITION_PK, 
+                        DEF_TEAM_COMPOSITION_PK, OFF_HOME_AWAY, DEF_TEAM_ID, DEF_HOME_AWAY, home_score, away_score, player_advantage, PLAYER_GROUPING_ID, goal_diff, pass_height
                     """).write_parquet('pass_level_stats.parquet')

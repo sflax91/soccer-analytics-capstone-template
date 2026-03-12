@@ -55,23 +55,49 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 
 
-# y_coords = duckdb.sql(f"""
-#                         SELECT GK, BACKS, MIDFIELDERS, FORWARDS, ATTACKING_MIDFIELDERS, DEFENDING_MIDFIELDERS, CENTER_FORWARDS, PLAYERS_ON_PITCH, OVERALL_FORMATION
-#                         FROM read_parquet('{project_location}/eda/team_composition.parquet') e
-#                         ORDER BY OVERALL_FORMATION, PLAYERS_ON_PITCH
-#                      """)
-# print(y_coords)
+y_coords = duckdb.sql(f"""
+
+                        SELECT player_id, --possession_team_id, DEF_TEAM_ID,
+                        --COUNT(distinct match_id) games_against,
+                        SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, 
+                        SUM(pass_cross_success) pass_cross_success, 
+                        SUM(pass_cross_fail) pass_cross_fail,
+                        SUM(pass_switch) pass_switch, 
+                        SUM(pass_through_ball_success) pass_through_ball_success, 
+                        SUM(pass_through_ball_fail) pass_through_ball_fail, 
+                        SUM(pass_aerial_won) pass_aerial_won, 
+                        SUM(pass_deflected) pass_deflected, 
+                        --SUM(pass_inswinging) pass_inswinging, 
+                        --SUM(pass_outswinging) pass_outswinging, 
+                        --SUM(pass_no_touch) pass_no_touch, 
+                        --SUM(pass_cut_back) pass_cut_back, 
+                        SUM(pass_straight) pass_straight, 
+                        SUM(pass_miscommunication) pass_miscommunication,
+                        SUM(pass_success) pass_success,
+                        SUM(pass_attempt) pass_attempt,
+
+                        (SUM(pass_through_ball_success) + SUM(pass_through_ball_fail)) / SUM(pass_attempt) percent_through_ball,
+                        (SUM(pass_cross_success) + SUM(pass_through_ball_fail)) / SUM(pass_attempt) percent_cross,
+                        SUM(pass_inswinging) / SUM(pass_attempt) percent_inswinging,
+                        SUM(pass_outswinging) / SUM(pass_attempt) percent_outswinging,
+                        SUM(pass_switch) / SUM(pass_attempt) percent_switch,
+                        --SUM(pass_cut_back) / SUM(pass_attempt) percent_cut_back,
+                        SUM(pass_straight) / SUM(pass_attempt) percent_straight
+
+                        FROM read_parquet('{project_location}/eda/pass_level_stats.parquet') 
+                        WHERE possession_team_id != DEF_TEAM_ID
+                        GROUP BY player_id--,possession_team_id, DEF_TEAM_ID
+                        ORDER BY player_id--,possession_team_id, DEF_TEAM_ID
+                     """)
+print(y_coords)
 
 # y_coords = duckdb.sql(f"""
 
-#                         SELECT match_id, period, possession, possession_team_id, team_id, OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK,
-#                         player_advantage, goal_diff, COUNT(*) number_of_duels, SUM(tackles) tackles, SUM(aerial_lost) aerial_lost, SUM(duels_lost) duels_lost, SUM(duels_won) duels_won
-#                         FROM read_parquet('{project_location}/eda/duel_level_stats.parquet')
-#                         GROUP BY match_id, period, possession, possession_team_id, team_id, OFF_TEAM_COMPOSITION_PK, DEF_TEAM_COMPOSITION_PK,
-#                         player_advantage, goal_diff
+#                         SELECT *
+#                         FROM read_parquet('{project_location}/eda/period_lineups.parquet')
                      
 #                      """)
-# print(y_coords)
+# print(y_coords.columns)
 
 # y_coords = duckdb.sql(f"""
                       
@@ -93,41 +119,41 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #                      """)
 # print(y_coords)
 
-y_coords = duckdb.sql(f"""
-                      SELECT MIDFIELDERS_ATTACKING_GROUP_ID, FORWARDS_ATTACKING_GROUP_ID, team_id,
-                      --player_id, 
-                      EVENT_ZONE_END ,
-                      --MAX(completed_pass_length) max_completed_pass_length, AVG(completed_pass_length) avg_completed_pass_length,
-                      SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, COUNT(completed_pass_length) completed_passes, COUNT(*) pass_attempts, 
-                      --BACKS_DEFENDING_GROUP_ID, MIDFIELDERS_DEFENDING_GROUP_ID, 
-                      --FORWARDS_ATTACKING_GROUP_ID, MIDFIELDERS_ATTACKING_GROUP_ID, 
-                      MIDFIELDERS_DEFENDING,  BACKS_DEFENDING, MIDFIELDERS_ATTACKING, FORWARDS_ATTACKING,
-                      FROM (
-                          SELECT 
-                          pl.team_id, player_id, EVENT_ZONE_END, --pass_length, 
-                          CASE WHEN pass_outcome IS NULL THEN pass_length ELSE NULL END AS completed_pass_length,
-                          --CASE WHEN EVENT_ZONE_END = EVENT_ZONE_START THEN 'Within' ELSE 'Outside' END AS PASS_WITHIN_ZONE,
-                      dtc.BACKS_GROUPING_ID BACKS_DEFENDING_GROUP_ID, dtc.MIDFIELDERS_GROUPING_ID MIDFIELDERS_DEFENDING_GROUP_ID,
-                      otc.FORWARDS_GROUPING_ID FORWARDS_ATTACKING_GROUP_ID, otc.MIDFIELDERS_GROUPING_ID MIDFIELDERS_ATTACKING_GROUP_ID,
-                          pass_goal_assist, pass_shot_assist, dtc.MIDFIELDERS MIDFIELDERS_DEFENDING, dtc.BACKS BACKS_DEFENDING, otc.MIDFIELDERS MIDFIELDERS_ATTACKING, otc.FORWARDS FORWARDS_ATTACKING
-                          FROM read_parquet('{project_location}/eda/pass_level_stats.parquet') pl
-                          LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') dtc
-                            ON DEF_TEAM_COMPOSITION_PK = dtc.TEAM_COMPOSITION_PK 
-                          LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') otc
-                            ON DEF_TEAM_COMPOSITION_PK = otc.TEAM_COMPOSITION_PK 
-                          )
-                      WHERE EVENT_ZONE_END LIKE 'O%'
-                      AND MIDFIELDERS_ATTACKING_GROUP_ID IS NOT NULL
-                      AND MIDFIELDERS_DEFENDING_GROUP_ID IS NOT NULL
-                      GROUP BY MIDFIELDERS_ATTACKING_GROUP_ID, FORWARDS_ATTACKING_GROUP_ID,
-                      --player_id, 
-                      EVENT_ZONE_END, team_id,
-                      --BACKS_DEFENDING_GROUP_ID, MIDFIELDERS_DEFENDING_GROUP_ID, 
-                      --FORWARDS_ATTACKING_GROUP_ID, MIDFIELDERS_ATTACKING_GROUP_ID, 
-                      MIDFIELDERS_DEFENDING,  BACKS_DEFENDING, MIDFIELDERS_ATTACKING, FORWARDS_ATTACKING
-                      ORDER BY pass_goal_assist DESC
-                     """)
-print(y_coords)
+# y_coords = duckdb.sql(f"""
+#                       SELECT MIDFIELDERS_ATTACKING_GROUP_ID, FORWARDS_ATTACKING_GROUP_ID, team_id,
+#                       --player_id, 
+#                       EVENT_ZONE_END ,
+#                       --MAX(completed_pass_length) max_completed_pass_length, AVG(completed_pass_length) avg_completed_pass_length,
+#                       SUM(pass_goal_assist) pass_goal_assist, SUM(pass_shot_assist) pass_shot_assist, COUNT(completed_pass_length) completed_passes, COUNT(*) pass_attempts, 
+#                       --BACKS_DEFENDING_GROUP_ID, MIDFIELDERS_DEFENDING_GROUP_ID, 
+#                       --FORWARDS_ATTACKING_GROUP_ID, MIDFIELDERS_ATTACKING_GROUP_ID, 
+#                       MIDFIELDERS_DEFENDING,  BACKS_DEFENDING, MIDFIELDERS_ATTACKING, FORWARDS_ATTACKING,
+#                       FROM (
+#                           SELECT 
+#                           pl.team_id, player_id, EVENT_ZONE_END, --pass_length, 
+#                           CASE WHEN pass_outcome IS NULL THEN pass_length ELSE NULL END AS completed_pass_length,
+#                           --CASE WHEN EVENT_ZONE_END = EVENT_ZONE_START THEN 'Within' ELSE 'Outside' END AS PASS_WITHIN_ZONE,
+#                       dtc.BACKS_GROUPING_ID BACKS_DEFENDING_GROUP_ID, dtc.MIDFIELDERS_GROUPING_ID MIDFIELDERS_DEFENDING_GROUP_ID,
+#                       otc.FORWARDS_GROUPING_ID FORWARDS_ATTACKING_GROUP_ID, otc.MIDFIELDERS_GROUPING_ID MIDFIELDERS_ATTACKING_GROUP_ID,
+#                           pass_goal_assist, pass_shot_assist, dtc.MIDFIELDERS MIDFIELDERS_DEFENDING, dtc.BACKS BACKS_DEFENDING, otc.MIDFIELDERS MIDFIELDERS_ATTACKING, otc.FORWARDS FORWARDS_ATTACKING
+#                           FROM read_parquet('{project_location}/eda/pass_level_stats.parquet') pl
+#                           LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') dtc
+#                             ON DEF_TEAM_COMPOSITION_PK = dtc.TEAM_COMPOSITION_PK 
+#                           LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') otc
+#                             ON DEF_TEAM_COMPOSITION_PK = otc.TEAM_COMPOSITION_PK 
+#                           )
+#                       WHERE EVENT_ZONE_END LIKE 'O%'
+#                       AND MIDFIELDERS_ATTACKING_GROUP_ID IS NOT NULL
+#                       AND MIDFIELDERS_DEFENDING_GROUP_ID IS NOT NULL
+#                       GROUP BY MIDFIELDERS_ATTACKING_GROUP_ID, FORWARDS_ATTACKING_GROUP_ID,
+#                       --player_id, 
+#                       EVENT_ZONE_END, team_id,
+#                       --BACKS_DEFENDING_GROUP_ID, MIDFIELDERS_DEFENDING_GROUP_ID, 
+#                       --FORWARDS_ATTACKING_GROUP_ID, MIDFIELDERS_ATTACKING_GROUP_ID, 
+#                       MIDFIELDERS_DEFENDING,  BACKS_DEFENDING, MIDFIELDERS_ATTACKING, FORWARDS_ATTACKING
+#                       ORDER BY pass_goal_assist DESC
+#                      """)
+# print(y_coords)
 
 
 # y_coords = duckdb.sql(f"""
