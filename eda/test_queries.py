@@ -57,60 +57,81 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 
 
-# y_coords = duckdb.sql(f"""
-
-#                       SELECT --player_id, team_id, match_id, goalkeeper_type, 
-#                       --goalkeeper_outcome, 
-#                       distinct goalkeeper_technique, 
-#                       goalkeeper_position--, goalkeeper_body_part
-#                       FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                       WHERE type = 'Goal Keeper' AND goalkeeper_outcome IN ('Saved Twice','Collected Twice ')
-#                      """)
-
-# print(y_coords)
-
-
-
 y_coords = duckdb.sql(f"""
 
-                      SELECT every_player.player_id, pct_shot_first_time, pct_shot_follows_dribble, pct_shot_open_goal, pct_shot_dominant_foot, 
-                      pct_shot_header, pct_shot_into_goal pct_shot_goal_scored, pct_shot_saved pct_shot_taken_saved, shots_per_minute, 
-                      goals_over_expected, pct_shot_q1 pct_shot_from_q1_dist, pct_shot_q2 pct_shot_from_q2_dist, 
-                      pct_shot_q3 pct_shot_from_q3_dist, pct_shot_q4 pct_shot_from_q4_dist, pct_shots_taken_in_arc, pct_of_goals_from_arc, pct_shots_taken_in_box, pct_of_goals_from_box, 
-                      avg_progress_to_goal_shooting_on_per_carry, avg_distance_traveled_per_carry, pct_carrying_team_possession, pct_miscontrol, 
-                      pct_dispossessed, carries, pct_duel_won, duels_per_minute, foul_committed_per_minute, yellow_cards_per_minute, 
-                      red_cards_per_minute, pressures_applied_per_minute defensive_pressures_applied_per_minute, blocks_per_minute defensive_blocks_per_minute, 
-                      interceptions_per_minute defensive_interceptions_per_minute, 
-                      MINUTES_ON_PITCH, pass_attempt, pass_success_pct, pass_attempts_per_minute, percent_cross_success, percent_through_ball_success, 
-                      percent_through_ball percent_pass_through_ball, percent_cross percent_pass_cross, percent_q1 percent_q1_pass_dist, 
-                      percent_q2 percent_q2_pass_dist, percent_q3 percent_q3_pass_dist, percent_q4 percent_q4_pass_dist, pass_shot_assist_per_minute
-                      FROM (
-                      SELECT player_id
-                      FROM read_parquet('{project_location}/eda/shot_k_means.parquet') 
-
-                      UNION
-
-                      SELECT player_id
-                      FROM read_parquet('{project_location}/eda/carry_k_means.parquet') 
-
-                      UNION
-
-                      SELECT player_id
-                      FROM read_parquet('{project_location}/eda/defense_k_means.parquet') 
-
-                      UNION
-
-                      SELECT player_id
-                      FROM read_parquet('{project_location}/eda/pass_k_means.parquet') 
-                      ) every_player
-                      LEFT JOIN read_parquet('{project_location}/eda/shot_k_means.parquet') s
-                        ON every_player.player_id = s.player_id
-                      LEFT JOIN read_parquet('{project_location}/eda/carry_k_means.parquet') c
-                        ON every_player.player_id = c.player_id
-                      LEFT JOIN read_parquet('{project_location}/eda/defense_k_means.parquet') d
-                        ON every_player.player_id = d.player_id
-                      LEFT JOIN read_parquet('{project_location}/eda/pass_k_means.parquet') p
-                        ON every_player.player_id = p.player_id
+                      with shot_percentiles as (
+                      SELECT PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY shot_statsbomb_xg) percentiles
+                      FROM read_parquet('{project_location}/eda/gk_stats.parquet')
+                      ),
+                      apply_shot_percentile as (
+                      SELECT gk.*,
+                      CASE 
+                      WHEN shot_statsbomb_xg <= (SELECT percentiles[1] FROM shot_percentiles ) THEN 'Q1' 
+                      WHEN shot_statsbomb_xg <= (SELECT percentiles[2] FROM shot_percentiles ) THEN 'Q2' 
+                      WHEN shot_statsbomb_xg <= (SELECT percentiles[3] FROM shot_percentiles ) THEN 'Q3' 
+                      ELSE 'Q4' END AS shot_xg_range
+                      FROM read_parquet('{project_location}/eda/gk_stats.parquet') gk
+                      ),
+                      categorize_shots as (
+                      SELECT match_id, gk_player_id, gk_save, gk_collected, gk_keeper_sweeper, gk_goal_conceded, gk_smother, gk_punch, gk_shot_faced, 
+                      gk_penalty_faced, gk_penalty_saved, gk_standing, gk_diving, gk_moving, gk_set, gk_prone, 
+                      CASE WHEN shot_zone LIKE '%L%' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as shot_faced_gk_right_side,
+                      CASE WHEN shot_zone LIKE '%R%' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 )THEN 1 ELSE 0 END as shot_faced_gk_left_side, 
+                      CASE WHEN IFNULL(shot_zone,'-') = '-' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 )THEN 1 ELSE 0 END as shot_faced_gk_unk_side,
+                      --CASE WHEN shot_zone LIKE '%L%' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as save_gk_right_side,
+                      --CASE WHEN shot_zone LIKE '%R%' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as save_gk_left_side,  
+                      CASE WHEN shot_xg_range = 'Q1' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q1_shot_xg,
+                      CASE WHEN shot_xg_range = 'Q2' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q2_shot_xg,
+                      CASE WHEN shot_xg_range = 'Q3' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q3_shot_xg,
+                      CASE WHEN shot_xg_range = 'Q4' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q4_shot_xg
+                      
+                      FROM apply_shot_percentile
+                      ),
+                      match_level as (
+                      SELECT match_id, gk_player_id, 
+                      SUM(gk_save) gk_save, SUM(gk_collected) gk_collected, SUM(gk_keeper_sweeper) gk_keeper_sweeper, SUM(gk_goal_conceded) gk_goal_conceded, 
+                      SUM(gk_smother) gk_smother, SUM(gk_punch) gk_punch, SUM(gk_shot_faced) gk_shot_faced, 
+                      SUM(gk_penalty_faced) gk_penalty_faced, SUM(gk_penalty_saved) gk_penalty_saved, SUM(gk_standing) gk_standing, 
+                      SUM(gk_diving) gk_diving, SUM(gk_moving) gk_moving, SUM(gk_set) gk_set, SUM(gk_prone) gk_prone, 
+                      SUM(shot_faced_gk_right_side) shot_faced_gk_right_side, 
+                      SUM(shot_faced_gk_left_side) shot_faced_gk_left_side,
+                      SUM(shot_faced_gk_unk_side) shot_faced_gk_unk_side, 
+                      --SUM(save_gk_right_side) save_gk_right_side, SUM(save_gk_left_side) save_gk_left_side, 
+                      SUM(q1_shot_xg) q1_shot_xg, SUM(q2_shot_xg) q2_shot_xg, SUM(q3_shot_xg) q3_shot_xg, SUM(q4_shot_xg) q4_shot_xg
+                      FROM categorize_shots
+                      GROUP BY match_id, gk_player_id
+                      ),
+                      get_time as (
+                      SELECT match_level.*, MINUTES_ON_PITCH
+                      FROM match_level
+                      LEFT JOIN read_parquet('{project_location}/eda/player_match_on_pitch.parquet') pt
+                        ON match_level.match_id - pt.match_id
+                        AND gk_player_id = player_id
+                      WHERE IFNULL(MINUTES_ON_PITCH,0) > 0
+                      )
+                      SELECT gk_player_id, 
+                      SUM(gk_save) / SUM(gk_shot_faced) gk_shot_save_pct,
+                      CASE 
+                      WHEN SUM(gk_penalty_saved) = 0 THEN 0
+                      WHEN SUM(gk_penalty_faced) = 0 THEN 0
+                      ELSE SUM(gk_penalty_saved) / SUM(gk_penalty_faced) 
+                      END AS gk_penalty_save_pct,
+                      SUM(q1_shot_xg) / SUM(gk_shot_faced) pct_q1_shot_xg, 
+                      SUM(q2_shot_xg) / SUM(gk_shot_faced) pct_q2_shot_xg, 
+                      SUM(q3_shot_xg) / SUM(gk_shot_faced) pct_q3_shot_xg, 
+                      SUM(q4_shot_xg) / SUM(gk_shot_faced) pct_q4_shot_xg, 
+                      SUM(gk_collected) / SUM(MINUTES_ON_PITCH) gk_collected_per_minute, 
+                      SUM(gk_keeper_sweeper) / SUM(MINUTES_ON_PITCH) gk_keeper_sweeper_per_minute, 
+                      SUM(gk_smother) / SUM(MINUTES_ON_PITCH) gk_smother_per_minute, 
+                      SUM(gk_punch) / SUM(MINUTES_ON_PITCH) gk_punch_per_minute, 
+                      SUM(gk_shot_faced) / SUM(MINUTES_ON_PITCH) gk_shot_faced_per_minute, 
+                      SUM(gk_penalty_faced) / SUM(MINUTES_ON_PITCH) gk_penalty_faced_per_minute,
+                      SUM(shot_faced_gk_right_side) / SUM(gk_shot_faced) pct_shot_from_gk_right,
+                      SUM(shot_faced_gk_left_side) / SUM(gk_shot_faced) pct_shot_from_gk_left,
+                      SUM(shot_faced_gk_unk_side) / SUM(gk_shot_faced) pct_shot_from_gk_unk
+                      
+                      FROM get_time
+                      GROUP BY gk_player_id
                      """)
 
 print(y_coords)
