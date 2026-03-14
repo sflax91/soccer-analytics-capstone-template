@@ -122,7 +122,7 @@ duckdb.sql(f"""
                         WHERE pass_length IS NOT NULL
                       ),
                         get_score as (
-                        SELECT pass_events.*, EVENT_ZONE_START, EVENT_ZONE_END, off_team.TEAM_COMPOSITION_PK OFF_TEAM_COMPOSITION_PK, def_team.TEAM_COMPOSITION_PK DEF_TEAM_COMPOSITION_PK,
+                        SELECT pass_events.*, POSITION_TYPE, EVENT_ZONE_START, EVENT_ZONE_END, off_team.TEAM_COMPOSITION_PK OFF_TEAM_COMPOSITION_PK, def_team.TEAM_COMPOSITION_PK DEF_TEAM_COMPOSITION_PK,
                         home_away.HOME_AWAY OFF_HOME_AWAY, home_away2.team_id DEF_TEAM_ID, home_away2.HOME_AWAY DEF_HOME_AWAY,
                         score_check1.home_score,
                         score_check1.away_score,
@@ -194,7 +194,37 @@ duckdb.sql(f"""
                         SELECT get_score.*, 
                         CASE WHEN OFF_HOME_AWAY = 'H' THEN home_score - away_score ELSE away_score - home_score END AS goal_diff,
                         FROM get_score
+                        ),
+                        calc_pct as (
+                        SELECT POSITION_TYPE, PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY pass_length) percentiles
+                        FROM read_parquet('{project_location}/eda/pass.parquet') p
+                        LEFT JOIN read_parquet('{project_location}/eda/player_match_timeline_with_score.parquet') pt
+                          ON p.player_id = pt.player_id
+                          AND p.match_id = pt.match_id
+                          AND p.period = pt.period
+                          AND event_date >= interval_start
+                          AND event_date < interval_end
+                        GROUP BY POSITION_TYPE
+                        ),
+                        position_percentile as (
+                        SELECT POSITION_TYPE, percentiles[1] percentile_25, percentiles[2] percentile_50, percentiles[3] percentile_75 
+                        FROM calc_pct
+                        ),
+                        apply_position_pct as (
+
+                        SELECT goal_diff_calc.*,
+                        CASE 
+                        WHEN pass_length <= percentile_25 THEN 'Q1'
+                        WHEN pass_length <= percentile_50 THEN 'Q2'
+                        WHEN pass_length <= percentile_75 THEN 'Q3'
+                        ELSE 'Q4'
+                        END AS position_pass_quartile
+                        FROM goal_diff_calc
+                        LEFT JOIN position_percentile
+                          ON goal_diff_calc.POSITION_TYPE = position_percentile.POSITION_TYPE
+                        WHERE pass_length >= 0
                         )
+
                         SELECT match_id, period, possession, possession_team_id, team_id, player_id, pass_recipient_id, EVENT_ZONE_START, EVENT_ZONE_END, OFF_TEAM_COMPOSITION_PK, 
                         DEF_TEAM_COMPOSITION_PK, OFF_HOME_AWAY, DEF_TEAM_ID, DEF_HOME_AWAY, home_score, away_score, player_advantage, PLAYER_GROUPING_ID, goal_diff, pass_height,
                         --'pass_angle', 'pass_type', 'pass_outcome', 'pass_technique', 'pass_length',
@@ -211,9 +241,17 @@ duckdb.sql(f"""
                         SUM(pass_outswinging) pass_outswinging, 
                         SUM(pass_no_touch) pass_no_touch, SUM(pass_cut_back) pass_cut_back, SUM(pass_straight) pass_straight, SUM(pass_miscommunication) pass_miscommunication,
                         SUM(CASE WHEN pass_outcome IS NOT NULL THEN 1 ELSE 0 END) pass_success,
+                        SUM(CASE WHEN position_pass_quartile = 'Q1' THEN 1 ELSE 0 END) pos_pct_q1,
+                        SUM(CASE WHEN position_pass_quartile = 'Q2' THEN 1 ELSE 0 END) pos_pct_q2,
+                        SUM(CASE WHEN position_pass_quartile = 'Q3' THEN 1 ELSE 0 END) pos_pct_q3,
+                        SUM(CASE WHEN position_pass_quartile = 'Q4' THEN 1 ELSE 0 END) pos_pct_q4,
+                        SUM(CASE WHEN pass_outcome IS NULL AND position_pass_quartile = 'Q1' THEN 1 ELSE 0 END) pos_pct_q1_success,
+                        SUM(CASE WHEN pass_outcome IS NULL AND position_pass_quartile = 'Q2' THEN 1 ELSE 0 END) pos_pct_q2_success,
+                        SUM(CASE WHEN pass_outcome IS NULL AND position_pass_quartile = 'Q3' THEN 1 ELSE 0 END) pos_pct_q3_success,
+                        SUM(CASE WHEN pass_outcome IS NULL AND position_pass_quartile = 'Q4' THEN 1 ELSE 0 END) pos_pct_q4_success,
                         COUNT(*) pass_attempt
                         
-                        FROM goal_diff_calc
+                        FROM apply_position_pct
 
                         GROUP BY match_id, period, possession, possession_team_id, team_id, player_id, pass_recipient_id, EVENT_ZONE_START, EVENT_ZONE_END, OFF_TEAM_COMPOSITION_PK, 
                         DEF_TEAM_COMPOSITION_PK, OFF_HOME_AWAY, DEF_TEAM_ID, DEF_HOME_AWAY, home_score, away_score, player_advantage, PLAYER_GROUPING_ID, goal_diff, pass_height

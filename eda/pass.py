@@ -21,7 +21,8 @@ duckdb.sql(f"""
                          CASE WHEN pass_no_touch = TRUE THEN 1 ELSE 0 END AS pass_no_touch, 
                          CASE WHEN pass_cut_back = TRUE THEN 1 ELSE 0 END AS pass_cut_back, 
                          CASE WHEN pass_straight = TRUE THEN 1 ELSE 0 END AS pass_straight, 
-                         CASE WHEN pass_miscommunication = TRUE THEN 1 ELSE 0 END AS pass_miscommunication
+                         CASE WHEN pass_miscommunication = TRUE THEN 1 ELSE 0 END AS pass_miscommunication,
+                        strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_date
                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
                         WHERE pass_length IS NOT NULL
                                 """).write_parquet('pass.parquet')
