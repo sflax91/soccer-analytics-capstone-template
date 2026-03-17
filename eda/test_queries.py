@@ -57,88 +57,125 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 
 
 
+# y_coords = duckdb.sql(f"""
+#                           with lineup_checks as (
+#                         SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, position_name, next_position, next_time
+#                         FROM (
+#                                     SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
+#                                     , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
+#                                     FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+#                                     )
+#                          )
+
+
+#                          SELECT *
+#                          FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')\
+#                          WHERE match_id IN (
+#                                             SELECT match_id
+#                                             FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') 
+#                                             WHERE IFNULL(to_period,100) < from_period
+#                                             OR from_time = IFNULL(to_time,'N/A')
+#                                             OR (IFNULL(to_period,100) = from_period AND from_time >= IFNULL(to_time,'N/A'))
+
+#                                             UNION
+
+#                                             SELECT match_id
+#                                             FROM lineup_checks
+#                                             WHERE next_time != to_time
+#                                             AND next_time IS NOT NULL
+#                                             AND next_position != position_name
+#                                             AND from_period <= to_period
+#                                             )
+#                           ORDER BY match_id, team_id, from_period, from_time
+
+#                      """)
+
+# print(y_coords)
+
+
+
+
+
+# y_coords = duckdb.sql(f"""
+#                         with lineup_checks as (
+#                         SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, position_name, next_position, next_time
+#                         FROM (
+#                                     SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
+#                                     , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
+#                                     FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+#                                     )
+#                          )
+
+
+#                          SELECT *
+#                          FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')
+#                          WHERE match_id IN (
+#                          SELECT distinct match_id
+#                          FROM lineup_checks
+#                          WHERE to_period < from_period
+#                          )
+
+#                          ORDER BY match_id, team_id
+
+#                      """).write_csv('bad_lineup_games.csv')
+
+#print(y_coords)
+
+
+
+# y_coords = duckdb.sql(f"""
+
+#                          SELECT period, minute, second, match_id, team_id, player_id, IFNULL(player_nickname, player_name) player, position_name
+#                          FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')
+#                          WHERE from_period = 1 AND from_time = '00:00'
+
+#                      """)
+
+# print(y_coords.columns)
+
 y_coords = duckdb.sql(f"""
 
-                      with shot_percentiles as (
-                      SELECT PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY shot_statsbomb_xg) percentiles
-                      FROM read_parquet('{project_location}/eda/gk_stats.parquet')
+                      with starting_xi as (
+                         SELECT from_period period, 0 as minute, 0 as second, match_id, team_id, player_id, IFNULL(player_nickname, player_name) player, 'Starting XI' as type, position_name, 
+                      NULL as substitution_replacement_id, NULL as substitution_replacement_name, NULL as substitution_outcome, NULL as bad_behaviour_card
+                         FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')
+                         WHERE from_period = 1 AND from_time = '00:00'
                       ),
-                      apply_shot_percentile as (
-                      SELECT gk.*,
-                      CASE 
-                      WHEN shot_statsbomb_xg <= (SELECT percentiles[1] FROM shot_percentiles ) THEN 'Q1' 
-                      WHEN shot_statsbomb_xg <= (SELECT percentiles[2] FROM shot_percentiles ) THEN 'Q2' 
-                      WHEN shot_statsbomb_xg <= (SELECT percentiles[3] FROM shot_percentiles ) THEN 'Q3' 
-                      ELSE 'Q4' END AS shot_xg_range
-                      FROM read_parquet('{project_location}/eda/gk_stats.parquet') gk
-                      ),
-                      categorize_shots as (
-                      SELECT match_id, gk_player_id, gk_save, gk_collected, gk_keeper_sweeper, gk_goal_conceded, gk_smother, gk_punch, gk_shot_faced, 
-                      gk_penalty_faced, gk_penalty_saved, gk_standing, gk_diving, gk_moving, gk_set, gk_prone, 
-                      CASE WHEN shot_zone LIKE '%L%' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as shot_faced_gk_right_side,
-                      CASE WHEN shot_zone LIKE '%R%' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 )THEN 1 ELSE 0 END as shot_faced_gk_left_side, 
-                      CASE WHEN IFNULL(shot_zone,'-') = '-' AND (IFNULL(gk_shot_faced,0) > 0 OR IFNULL(gk_save,0) > 0 )THEN 1 ELSE 0 END as shot_faced_gk_unk_side,
-                      --CASE WHEN shot_zone LIKE '%L%' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as save_gk_right_side,
-                      --CASE WHEN shot_zone LIKE '%R%' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END as save_gk_left_side,  
-                      CASE WHEN shot_xg_range = 'Q1' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q1_shot_xg,
-                      CASE WHEN shot_xg_range = 'Q2' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q2_shot_xg,
-                      CASE WHEN shot_xg_range = 'Q3' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q3_shot_xg,
-                      CASE WHEN shot_xg_range = 'Q4' AND (IFNULL(gk_save,0) > 0 ) THEN 1 ELSE 0 END AS q4_shot_xg
-                      
-                      FROM apply_shot_percentile
-                      ),
-                      match_level as (
-                      SELECT match_id, gk_player_id, 
-                      SUM(gk_save) gk_save, SUM(gk_collected) gk_collected, SUM(gk_keeper_sweeper) gk_keeper_sweeper, SUM(gk_goal_conceded) gk_goal_conceded, 
-                      SUM(gk_smother) gk_smother, SUM(gk_punch) gk_punch, SUM(gk_shot_faced) gk_shot_faced, 
-                      SUM(gk_penalty_faced) gk_penalty_faced, SUM(gk_penalty_saved) gk_penalty_saved, SUM(gk_standing) gk_standing, 
-                      SUM(gk_diving) gk_diving, SUM(gk_moving) gk_moving, SUM(gk_set) gk_set, SUM(gk_prone) gk_prone, 
-                      SUM(shot_faced_gk_right_side) shot_faced_gk_right_side, 
-                      SUM(shot_faced_gk_left_side) shot_faced_gk_left_side,
-                      SUM(shot_faced_gk_unk_side) shot_faced_gk_unk_side, 
-                      --SUM(save_gk_right_side) save_gk_right_side, SUM(save_gk_left_side) save_gk_left_side, 
-                      SUM(q1_shot_xg) q1_shot_xg, SUM(q2_shot_xg) q2_shot_xg, SUM(q3_shot_xg) q3_shot_xg, SUM(q4_shot_xg) q4_shot_xg
-                      FROM categorize_shots
-                      GROUP BY match_id, gk_player_id
-                      ),
-                      get_time as (
-                      SELECT match_level.*, MINUTES_ON_PITCH
-                      FROM match_level
-                      LEFT JOIN read_parquet('{project_location}/eda/player_match_on_pitch.parquet') pt
-                        ON match_level.match_id - pt.match_id
-                        AND gk_player_id = player_id
-                      WHERE IFNULL(MINUTES_ON_PITCH,0) > 0
-                      )
-                      SELECT gk_player_id, 
-                      SUM(gk_save) / SUM(gk_shot_faced) gk_shot_save_pct,
-                      CASE 
-                      WHEN SUM(gk_penalty_saved) = 0 THEN 0
-                      WHEN SUM(gk_penalty_faced) = 0 THEN 0
-                      ELSE SUM(gk_penalty_saved) / SUM(gk_penalty_faced) 
-                      END AS gk_penalty_save_pct,
-                      SUM(q1_shot_xg) / SUM(gk_shot_faced) pct_q1_shot_xg, 
-                      SUM(q2_shot_xg) / SUM(gk_shot_faced) pct_q2_shot_xg, 
-                      SUM(q3_shot_xg) / SUM(gk_shot_faced) pct_q3_shot_xg, 
-                      SUM(q4_shot_xg) / SUM(gk_shot_faced) pct_q4_shot_xg, 
-                      SUM(gk_collected) / SUM(MINUTES_ON_PITCH) gk_collected_per_minute, 
-                      SUM(gk_keeper_sweeper) / SUM(MINUTES_ON_PITCH) gk_keeper_sweeper_per_minute, 
-                      SUM(gk_smother) / SUM(MINUTES_ON_PITCH) gk_smother_per_minute, 
-                      SUM(gk_punch) / SUM(MINUTES_ON_PITCH) gk_punch_per_minute, 
-                      SUM(gk_shot_faced) / SUM(MINUTES_ON_PITCH) gk_shot_faced_per_minute, 
-                      SUM(gk_penalty_faced) / SUM(MINUTES_ON_PITCH) gk_penalty_faced_per_minute,
-                      SUM(shot_faced_gk_right_side) / SUM(gk_shot_faced) pct_shot_from_gk_right,
-                      SUM(shot_faced_gk_left_side) / SUM(gk_shot_faced) pct_shot_from_gk_left,
-                      SUM(shot_faced_gk_unk_side) / SUM(gk_shot_faced) pct_shot_from_gk_unk
-                      
-                      FROM get_time
-                      GROUP BY gk_player_id
+                      other_events as (
+                         SELECT period, minute, second, match_id, team_id, player_id, player, type, position, substitution_replacement_id, substitution_replacement_name, substitution_outcome, bad_behaviour_card
+                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                         WHERE type IN (
+                                        --'Bad Behaviour',
+                                        --'Foul Committed',
+                                        'Half End',
+                                        --'Half Start',
+                                        --'Player Off',
+                                        --'Player On',
+                                        --'Starting XI',
+                                        'Substitution',
+                                        'Tactical Shift'
+                                        )
+                            OR bad_behaviour_card IN ('Red Card', 'SecondYellow')
+                            OR type = 'Half Start' AND period > 1
+                        ),
+                        combine_sources as (
+                        SELECT *
+                        FROM starting_xi
+
+                        UNION
+
+                        SELECT *
+                        FROM other_events
+                        )
+
+                        SELECT *
+                        FROM combine_sources
+                        WHERE match_id = 19815 AND (player_id IN (19420, 16397) OR position_name = 'Right Center Back')
+                        ORDER BY match_id, team_id, period, minute, second, player_id
+
                      """)
 
 print(y_coords)
-
-
-
-
 
 
 # y_coords = duckdb.sql(f"""
