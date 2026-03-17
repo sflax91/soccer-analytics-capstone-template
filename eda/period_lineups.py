@@ -228,7 +228,7 @@ duckdb.sql(f"""
                         
                         FROM get_player_position
                         )
-                        SELECT gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE,
+                        SELECT gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE, gr.POSITION_TYPE_ALT, gr.POSITION_BEHAVIOR,
                         SUM(CASE WHEN gr.country_id = gr2.country_id THEN 1 ELSE 0 END) PLAYERS_SAME_COUNTRY,
                         SUM(CASE WHEN gr.country_id != gr2.country_id THEN 1 ELSE 0 END) PLAYERS_DIFF_COUNTRY,
                         SUM(CASE WHEN gr.POSITION_TYPE = gr2.POSITION_TYPE AND gr.country_id = gr2.country_id THEN 1 ELSE 0 END) POSITION_SAME_COUNTRY,
@@ -244,5 +244,5 @@ duckdb.sql(f"""
                               AND gr.interval_start = gr2.interval_start
                               AND gr.interval_end = gr2.interval_end
                               AND gr.player_id != gr2.player_id
-                        GROUP BY gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE
+                        GROUP BY gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE, gr.POSITION_TYPE_ALT, gr.POSITION_BEHAVIOR
                     """).write_parquet('period_lineups.parquet')

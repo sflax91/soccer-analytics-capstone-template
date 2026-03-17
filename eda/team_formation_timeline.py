@@ -33,7 +33,7 @@ duckdb.sql(f"""
                               GROUP BY match_id, team_id, period, interval_start, interval_end
                               ), 
                               get_subformation as (
-                              SELECT position_stats.*, GK, BACKS, MIDFIELDERS, ATTACKING_MIDFIELDERS, DEFENDING_MIDFIELDERS, FORWARDS,CENTER_FORWARDS, 
+                              SELECT position_stats.*, --GK, BACKS, MIDFIELDERS, ATTACKING_MIDFIELDERS, DEFENDING_MIDFIELDERS, FORWARDS,CENTER_FORWARDS, 
                               CASE
                               WHEN FORWARDS = 0 THEN NULL 
                               WHEN FORWARDS > 0 

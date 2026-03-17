@@ -20,8 +20,11 @@ possession_check = duckdb.sql(f"""SELECT id, index_num, period, minute, second, 
                                 AND type NOT IN ('Starting XI','Half Start')
                                 AND possession_team_id != team_id 
                                 AND type != 'Pressure'
+
+
                                 
                                 """)
+
 
 #print(possession_check)
 
@@ -33,6 +36,7 @@ possession_check2 = duckdb.sql(f"""
                                 WHERE match_id = 15973 
                                 AND type NOT IN ('Starting XI','Half Start')
                                 AND type NOT IN ('Pressure', 'Foul Committed')
+
                                 ),
 
                                 multi_team as (
@@ -57,4 +61,4 @@ duckdb.sql(f"""
                                 FROM read_parquet('{project_location}/Statsbomb/matches.parquet') 
                                 GROUP BY is_international, season_name, country_name
                                 ORDER BY is_international, season_name, country_name
-                                """).write_csv('macth_breakdown.csv', header=True)
+                                """)
