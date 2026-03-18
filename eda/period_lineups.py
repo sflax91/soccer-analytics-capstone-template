@@ -8,214 +8,171 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 #'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
 
 duckdb.sql(f"""
-                          with lineup_checks as (
-                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, next_time, position_name, next_position
-                        FROM (
-                                    SELECT lineup.*, LEAD(from_time,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_time
-                                    , LEAD(position_name,1) OVER (PARTITION BY match_id, team_id, player_id ORDER BY match_id, team_id, player_id, from_period, to_period, from_time) next_position
-                                    FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
-                                    )
-                         ),
-                         
-                         bad_matches as (
-                         SELECT distinct match_id
-                         FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') 
-                         WHERE IFNULL(to_period,100) < from_period
-                         OR from_time = IFNULL(to_time,'N/A')
-                         OR (IFNULL(to_period,100) = from_period AND from_time >= IFNULL(to_time,'N/A'))
-
-                         UNION
-
-                        SELECT distinct match_id
-                        FROM lineup_checks
-                        WHERE next_time != to_time
-                        AND next_time IS NOT NULL
-                        AND next_position != position_name
-                        AND from_period <= to_period
-                         ),
-                           half_timestamps as (
-                              SELECT match_id, team_id, period, minute, second, timestamp, start_date + TO_MINUTES(minute) + TO_SECONDS(second) period_timestamp, type
-                              FROM (SELECT distinct match_id, team_id, period, minute, second, timestamp, strptime('2026-01-01' , '%Y-%m-%d') start_date, type
-                                    FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
-                                    WHERE type IN ('Half End', 'Half Start')
-                                    )
+                      with starting_xi as (
+                         SELECT from_period period, 0 as minute, 0 as second, match_id, team_id, player_id, IFNULL(player_nickname, player_name) player, 'Starting XI' as type, position_name, 
+                      NULL as substitution_replacement_id, NULL as substitution_replacement_name, NULL as substitution_outcome, NULL as bad_behaviour_card
+                         FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')
+                         WHERE from_period = 1 AND from_time = '00:00'
+                      ),
+                      other_events as (
+                         SELECT period, minute, second, match_id, team_id, player_id, player, type, position, substitution_replacement_id, substitution_replacement_name, substitution_outcome, bad_behaviour_card
+                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                         WHERE type IN (
+                                        --'Bad Behaviour',
+                                        --'Foul Committed',
+                                        'Half End',
+                                        --'Half Start',
+                                        --'Player Off',
+                                        --'Player On',
+                                        --'Starting XI',
+                                        'Substitution',
+                                        'Tactical Shift'
+                                        )
+                            OR bad_behaviour_card IN ('Red Card', 'Second Yellow')
+                            OR type = 'Half Start' AND period > 1
                         ),
-                        correct_lineups as (
-                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, from_time, to_time, position_name
-                        FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet') lineup
+                        combine_sources as (
+                        SELECT *
+                        FROM starting_xi
 
                         UNION
-                        
-                        SELECT match_id, team_id, player_id, country_id, from_period, to_period, to_time, next_time, position_name
-                        FROM lineup_checks
-                        WHERE next_time != to_time
-                        AND next_time IS NOT NULL
-                        AND next_position = position_name
-                        AND from_period <= to_period
+
+                        SELECT *
+                        FROM other_events
                         ),
-                         initial_dates as (
-                        SELECT distinct l.match_id, l.team_id, player_id, country_id, position_name, from_time, to_time, from_period, IFNULL(to_period, mp.max_period) to_period , 
-                         strptime('2026-01-01' , '%Y-%m-%d') start_date,
-                         CAST(LEFT(from_time, INSTR(from_time, ':') - 1 ) AS INTEGER)  from_minute, 
-                         CAST(SUBSTR(from_time, LEN(from_time) - 1) AS INTEGER) from_second,
-                         IFNULL(CAST(LEFT(to_time, INSTR(to_time, ':') - 1 ) AS INTEGER), mp2.minute)  to_minute, 
-                         IFNULL(CAST(SUBSTR(to_time, LEN(to_time) - 1) AS INTEGER), mp2.second) to_second
-                         FROM correct_lineups l
-                         --read_parquet('{project_location}/data/Statsbomb/lineups.parquet') l
-                         LEFT JOIN (SELECT match_id, MAX(period) max_period from half_timestamps GROUP BY match_id) mp
-                              ON l.match_id = mp.match_id
-                        LEFT JOIN (SELECT distinct match_id, team_id, period, minute, second FROM half_timestamps) mp2
-                              ON mp.match_id = mp2.match_id
-                              AND mp.max_period = mp2.period
-                         WHERE l.match_id NOT IN (SELECT match_id FROM bad_matches)
-                         AND from_period IS NOT NULL 
-                           ),
+                        stack_changes as (
+                        SELECT period, strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_timestamp, match_id, team_id, player_id, player, 
+                        CASE WHEN type = 'Substitution' THEN 'Substitution - Off' ELSE type END AS type, position_name--, substitution_replacement_id, substitution_replacement_name, substitution_outcome, bad_behaviour_card
+                        FROM combine_sources
+                        
 
-                           convert_timestamp as (
+                        UNION
 
-                           SELECT initial_dates.match_id, initial_dates.team_id, player_id, country_id, position_name, from_time, to_time, from_period, to_period , 
-                           start_date, from_minute, from_second, to_minute, to_second,
-                           start_date + TO_MINUTES(from_minute) + TO_SECONDS(from_second) start_date_adj,
-                           CASE 
-                           WHEN to_minute IS NOT NULL THEN start_date + TO_MINUTES(to_minute) + TO_SECONDS(to_second) 
-                           ELSE h_end.period_timestamp
-                           END AS end_date_adj
-                           FROM initial_dates
-                        LEFT JOIN (SELECT match_id, MAX(period) max_period from half_timestamps GROUP BY match_id) mp
-                              ON initial_dates.match_id = mp.match_id
-                           LEFT JOIN (SELECT match_id, period, team_id, MAX(period_timestamp) period_timestamp FROM half_timestamps WHERE type = 'Half End' GROUP BY match_id, period, team_id) h_end
-                              ON initial_dates.match_id = h_end.match_id
-                              AND initial_dates.team_id = h_end.team_id
-                              AND IFNULL(initial_dates.to_period, mp.max_period) = h_end.period
-                           WHERE from_period < IFNULL(to_period,100) 
-                                    OR (from_period = to_period 
-                                          AND to_minute IS NOT NULL 
-                                          AND start_date + TO_MINUTES(to_minute) + TO_SECONDS(to_second) > start_date_adj)
-                                    OR (from_period = to_period 
-                                          AND to_minute IS NULL )
 
-                                    
-                         ),
+                        SELECT period, strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_timestamp, match_id, team_id, substitution_replacement_id, substitution_replacement_name, 
+                        CASE 
+                        WHEN type = 'Substitution' THEN 'Substitution - On' 
+                        WHEN bad_behaviour_card IN ('Second Yellow', 'Red Card') THEN bad_behaviour_card
+                        ELSE type END AS type, position_name
+                        FROM combine_sources
+                        WHERE substitution_replacement_id IS NOT NULL OR bad_behaviour_card IN ('Second Yellow', 'Red Card')
+                        ),
 
-                        all_lineup_times as (
-                           SELECT distinct match_id, team_id, period_tracked, period_time interval_start
-                           FROM (SELECT distinct match_id, team_id, start_date_adj period_time, from_period period_tracked
-                                 FROM convert_timestamp
-                                 WHERE from_period IS NOT NULL 
-                                          AND from_time IS NOT NULL 
-                                          AND IFNULL(start_date_adj,TODAY()) != IFNULL(end_date_adj,TODAY())
 
-                                 UNION
-                                 
-                                 SELECT distinct match_id, team_id, end_date_adj, to_period
-                                 FROM convert_timestamp
-                                 WHERE from_period IS NOT NULL 
-                                          AND to_period IS NOT NULL 
-                                          AND to_time IS NOT NULL 
-                                          AND IFNULL(start_date_adj,TODAY()) != IFNULL(end_date_adj,TODAY())
+                        get_half as (
+                                                
+                        SELECT distinct event_times.period, event_times.event_timestamp, event_times.match_id, team_id, player_id, player, type, position_name
+                        FROM (
+                              SELECT period, strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_timestamp, match_id, type
+                              FROM other_events
+                              WHERE type IN ('Half Start', 'Half End')) event_times
+                        INNER JOIN (SELECT distinct match_id, team_id, player_id, player, event_timestamp, position_name, period
+                                       FROM stack_changes
+                                    ) all_players
+                              ON event_times.match_id = all_players.match_id
+                              AND event_times.period >= all_players.period
+                              AND event_times.event_timestamp >= all_players.event_timestamp
+                        ),
 
-                                 UNION
 
-                                 SELECT distinct match_id, team_id, period_timestamp, period
-                                 FROM half_timestamps
-                                 
-                                 )
-                            ),
+                        id_lineup_change as (
+                        SELECT stack_changes.*,
+                        CASE 
+                        WHEN IFNULL(LAG(period,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp),-1) != IFNULL(period,-1) THEN 1
+                        WHEN IFNULL(LAG(position_name,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp),'-') != IFNULL(position_name,'-') THEN 1
+                        ELSE 0
+                        END AS lineup_change
+                        FROM stack_changes
+                        WHERE player_id IS NOT NULL
+                        ),
+                        iso_changes as (
+                        SELECT period, event_timestamp, match_id, team_id, player_id, player, type, position_name
+                        FROM id_lineup_change
+                        WHERE lineup_change = 1
 
-                              all_lineup_changes as (
-                                 SELECT *
-                                 FROM (
-                                       SELECT match_id, team_id, period_tracked period, interval_start, LEAD(interval_start,1) OVER (PARTITION BY match_id, team_id, period_tracked ORDER BY match_id, team_id, period_tracked, interval_start) interval_end
-                                       FROM all_lineup_times
-                                       )
-                                 WHERE period IS NOT NULL 
-                                          AND interval_start != IFNULL(interval_end, TODAY()) 
-                                          AND interval_end IS NOT NULL
+                        UNION
 
-                                 ),
-                           period_start_end as (
-                           SELECT match_id, period, 
-                           MIN(interval_start) period_start, 
-                           MAX(interval_end) period_end
-                           FROM all_lineup_changes
-                           GROUP BY match_id, period
-                           ),
-                        player_match_timeline as (
-                              SELECT distinct player_multi_period.match_id, team_id, player_id, country_id, position_name, period,
-                                    start_date_adj player_start_date, end_date_adj player_end_date
-                              FROM (SELECT convert_timestamp.*
-                                    FROM convert_timestamp
-                                    WHERE from_period != to_period) player_multi_period
-                              INNER JOIN period_start_end p
-                                    ON player_multi_period.match_id = p.match_id
-                                    AND period = from_period
-                              WHERE start_date_adj < end_date_adj
-                              
+                        SELECT period, event_timestamp, match_id, team_id, player_id, player, type, position_name
+                        FROM get_half
+                        
+                        ),
+                        find_end as (
+                        SELECT period, event_timestamp, 
+                        LEAD(event_timestamp,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) next_event_timestamp,
+                        match_id, team_id, player_id, player, type, 
+                        LEAD(type,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) next_event_type, position_name
+                        FROM iso_changes
+                        ),
+                        initial_intervals as (
+                        SELECT period, event_timestamp interval_start, next_event_timestamp interval_end, match_id, team_id, player_id, player, type, next_event_type, position_name
+                        FROM find_end
+                        WHERE type NOT IN ('Substitution - Off', 'Half End', 'Second Yellow', 'Red Card')
+                        AND player_id IS NOT NULL
+                        ),
+                        sub_out as (
+                        SELECT player_id, event_timestamp, period, match_id, type
+                        FROM stack_changes
+                        WHERE type IN ('Substitution - Off', 'Second Yellow', 'Red Card') AND player_id IS NOT NULL
+                        ),
+                        match_intervals_tmp as (
+                        SELECT initial_intervals.*
+                        FROM initial_intervals
+                        LEFT JOIN sub_out
+                           ON initial_intervals.match_id = sub_out.match_id
+                           AND initial_intervals.player_id = sub_out.player_id
+                        WHERE (initial_intervals.period < IFNULL(sub_out.period,9999999)
+                           OR (initial_intervals.period = IFNULL(sub_out.period,9999999) AND initial_intervals.interval_start < sub_out.event_timestamp)
+                           )
+                           AND initial_intervals.match_id = 7581
+                           --initial_intervals.match_id = 7298
+                        ),
+                        non_player_event_lineup_changes as (
+                        SELECT period, match_id, team_id, interval_end event_timestamp, 'Team Substition/Dismissal' AS type
+                        FROM match_intervals_tmp
+                        WHERE UPPER(next_event_type) LIKE '%SUBSTITUTION%' OR next_event_type IN ('Second Yellow', 'Red Card')
+                        ),
+                        check_other_subs as (
+                        SELECT match_intervals_tmp.period, match_intervals_tmp.match_id, match_intervals_tmp.team_id, non_player_event_lineup_changes.event_timestamp, non_player_event_lineup_changes.type, position_name, match_intervals_tmp.player_id, player
+                        FROM match_intervals_tmp
+                        INNER JOIN non_player_event_lineup_changes
+                           ON match_intervals_tmp.period = non_player_event_lineup_changes.period
+                           AND match_intervals_tmp.match_id = non_player_event_lineup_changes.match_id
+                           AND match_intervals_tmp.team_id = non_player_event_lineup_changes.team_id
+                           AND non_player_event_lineup_changes.event_timestamp >= match_intervals_tmp.interval_start
+                           AND non_player_event_lineup_changes.event_timestamp < match_intervals_tmp.interval_end
+                        --ORDER BY initial_intervals.match_id, initial_intervals.team_id, initial_intervals.player_id, initial_intervals.period, initial_intervals.event_timestamp
 
-                              UNION
+                        UNION
 
-                              SELECT distinct player_multi_period2.match_id, team_id, player_id, country_id, position_name, period,
-                                    period_start , period_end
-                              FROM (SELECT convert_timestamp.*
-                                    FROM convert_timestamp
-                                    WHERE from_period != to_period) player_multi_period2
-                              INNER JOIN period_start_end p3
-                                    ON player_multi_period2.match_id = p3.match_id
-                                    AND period > from_period
-                                    AND period < to_period
+                        SELECT period, match_id, team_id, interval_start, type, position_name, player_id, player
+                        FROM match_intervals_tmp
 
-                              UNION
+                        UNION
 
-                              SELECT distinct player_multi_period3.match_id, team_id, player_id, country_id, position_name, period,
-                                    start_date_adj, end_date_adj
-                              FROM (SELECT convert_timestamp.*
-                                    FROM convert_timestamp
-                                    WHERE from_period != to_period) player_multi_period3
-                              INNER JOIN period_start_end p4
-                                    ON player_multi_period3.match_id = p4.match_id
-                                    AND period = to_period
-                              WHERE start_date_adj < end_date_adj
-
-                              UNION
-
-                              SELECT distinct player_multi_period4.match_id, team_id, player_id, country_id, position_name, period,
-                                    start_date_adj , end_date_adj
-                              FROM (SELECT convert_timestamp.*
-                                    FROM convert_timestamp
-                                    WHERE from_period = to_period) player_multi_period4
-                              INNER JOIN period_start_end p5
-                                    ON player_multi_period4.match_id = p5.match_id
-                                    AND period = from_period
-                              WHERE start_date_adj < end_date_adj
+                        SELECT period, match_id, team_id, interval_end, next_event_type, position_name, player_id, player
+                        FROM match_intervals_tmp
 
                         ),
                         match_intervals as (
-                        SELECT distinct alc.*, player_id, country_id, position_name
-                        FROM all_lineup_changes alc
-                        LEFT JOIN player_match_timeline pmt
-                              ON alc.match_id = pmt.match_id
-                              AND alc.team_id = pmt.team_id
-                              AND alc.period = pmt.period
-                              AND alc.interval_start >= player_start_date
-                              AND alc.interval_start < player_end_date
+                              SELECT *
+                              FROM (
+                                    SELECT period, match_id, team_id, position_name, player_id, player, event_timestamp interval_start,
+                                    LEAD(event_timestamp,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) interval_end, type,
+                                    LEAD(type,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) next_event_type,
+
+                                    FROM check_other_subs
+                                    )
+                        WHERE type NOT IN ('Substitution - Off', 'Second Yellow', 'Red Card', 'Half End')                       
                         ),
                         get_player_position as (
                         SELECT match_intervals.*, 
                          CASE WHEN POSITION_SIDE IN ('RC','LC') THEN 'C' ELSE POSITION_SIDE END AS POSITION_SIDE_ADJ, 
-                         POSITION_TYPE_ALT, POSITION_BEHAVIOR, POSITION_TYPE
+                         POSITION_TYPE_ALT, POSITION_BEHAVIOR, POSITION_TYPE, country_id
                         FROM match_intervals
                         LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
                               ON match_intervals.position_name = pt.position_name
-                        WHERE match_id NOT IN (SELECT match_id FROM bad_matches) 
-                              AND match_id NOT IN (
-                                                SELECT distinct match_id 
-                                                      FROM (
-                                                      SELECT match_id, team_id, period, interval_start, interval_end, COUNT(*)
-                                                      FROM match_intervals
-                                                      GROUP BY match_id, team_id, period, interval_start, interval_end
-                                                      HAVING COUNT(*) > 11 OR COUNT(*) < 9
-                                                      )
-                                                )
+                        LEFT JOIN (SELECT distinct player_id, country_id FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')) get_country
+                           ON match_intervals.player_id = get_country.player_id
 
                          ),
                         get_ranks as (
