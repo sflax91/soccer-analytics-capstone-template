@@ -1,8 +1,12 @@
 import duckdb
+from pathlib import Path
 
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "position_type.parquet")
 
 duckdb.sql(f"""
                             SELECT initial_types.*,
@@ -43,9 +47,9 @@ duckdb.sql(f"""
                               RANK () OVER (ORDER BY POSITION_NAME) POSITION_TYPE_PK
                             FROM (
                                SELECT distinct position_name
-                                FROM read_parquet('{project_location}/Statsbomb/lineups.parquet') 
+                                FROM read_parquet('{STATSBOMB_DIR}/lineups.parquet') 
                                 WHERE position_name IS NOT NULL
                                  ) position_type
                                  ) initial_types
-                    """).write_parquet('position_type.parquet')
+                    """).write_parquet(output_path)
 

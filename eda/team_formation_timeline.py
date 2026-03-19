@@ -1,11 +1,14 @@
 import duckdb
-import math
+from pathlib import Path
+
 
 #IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "team_formation_timeline.parquet")
 
 duckdb.sql(f"""
                               with get_player_type as (
@@ -17,7 +20,7 @@ duckdb.sql(f"""
                               CASE WHEN POSITION_TYPE = 'F' AND POSITION_TYPE_ALT = 'CF' THEN 1 ELSE 0 END AS CENTER_FORWARDS,
                               CASE WHEN POSITION_TYPE = 'M' AND POSITION_BEHAVIOR = 'A' THEN 1 ELSE 0 END AS ATTACKING_MIDFIELDERS,
                               CASE WHEN POSITION_TYPE = 'M' AND POSITION_BEHAVIOR = 'D' THEN 1 ELSE 0 END AS DEFENDING_MIDFIELDERS
-                              FROM read_parquet('{project_location}/eda/period_lineups.parquet')  mi
+                              FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet')  mi
                               WHERE player_id IS NOT NULL
                               ),
                               position_stats as (
@@ -63,4 +66,4 @@ duckdb.sql(f"""
                            , BACKS + MIDFIELDERS + FORWARDS + GK PLAYERS_ON_PITCH
                            FROM get_subformation
                            )
-                    """).write_parquet('team_formation_timeline.parquet')
+                    """).write_parquet(output_path)

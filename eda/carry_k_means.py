@@ -1,99 +1,12 @@
 import duckdb
-import math
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
-
-# test_query = duckdb.sql(f"""
-#                         SELECT *
-#                         FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
-
-#                         """
-#                         )#.write_csv('match_investigate.csv')
-# print(test_query.columns)
-
-# test_query2 = duckdb.sql(f"""
-                        # SELECT FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE, AVG(shot_statsbomb_xg) avg_shot_statsbomb_xg, COUNT(id) number_of_shots, COUNT(match_id) number_of_matches
-                        # FROM get_shot_xg
-                        # GROUP BY FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE
-                        # ORDER BY AVG(shot_statsbomb_xg) DESC
-#                     """)
-
-# print(test_query2)
-
-# x_coords = duckdb.sql(f"""
-#                         SELECT location_x
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_x IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-
-# y_coords = duckdb.sql(f"""
-#                         SELECT location_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-#x_coords, y_coords = np.array(xy_coords).T
-
-
-#print(x_coords)
-
-#plt.scatter(x_coords, y_coords)
-#plt.savefig('another_test.png')
-
-
-# y_coords = duckdb.sql(f"""
-                      
-#                       SELECT distinct min_x, max_x, min_y, max_y
-#                       FROM (
-#                         SELECT match_id, MIN(round(location_x)) min_x, MAX(round(location_x)) max_x, MIN(round(location_y)) min_y, MAX(round(location_y)) max_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
-#                         GROUP BY match_id)
- 
-#                     """)
-# print(y_coords)
-
-#x coords
-#0-18 left box
-#102-120 right box
-
-#y coords
-#40 +- (20.115)
-#60.115
-#19.885
-
-
-#left box
-
-#top left
-#(60.115, 0)
-#top right
-#(60.115, 18)
-#bottom left
-#(19.885, 0)
-#bottom right
-#(19.885, 18)
-
-
-#right box
-
-#top left
-#(60.115, 102)
-#top right
-#(60.115, 120)
-#bottom left
-#(19.885, 102)
-#bottom right
-#(19.885, 120)
-
-#halfway 60
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "carry_k_means.parquet")
 
 duckdb.sql(f"""
                       with match_stats as (
@@ -105,8 +18,8 @@ duckdb.sql(f"""
                       SUM(IFNULL(PROGRESS_TO_GOAL_SHOOTING_ON,0)) total_progress_to_goal_shooting_on_carry,
                       --AVG(IFNULL(PROGRESS_TO_GOAL_SHOOTING_ON,0)) avg_progress_to_goal_shooting_on_carry, 
                       COUNT(*) carries
-                      FROM read_parquet('{project_location}/eda/carry.parquet') c
-                      LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
+                      FROM read_parquet('{ADDITIONAL_DIR}/carry.parquet') c
+                      LEFT JOIN read_parquet('{ADDITIONAL_DIR}/event_proximity.parquet') ep
                         ON c.id = ep.id
                       GROUP BY c.player_id, c.match_id, c.possession_team_id
                       ),
@@ -122,8 +35,8 @@ duckdb.sql(f"""
 
                       LEFT JOIN (
                                   SELECT possession_team_id, pt.player_id, e.match_id, SUM(IFNULL(duration,0)) team_seconds_possession_when_player_on_pitch 
-                                  FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-                                  LEFT JOIN read_parquet('{project_location}/eda/player_match_timeline_with_score.parquet') pt
+                                  FROM read_parquet('{STATSBOMB_DIR}/events.parquet') e
+                                  LEFT JOIN read_parquet('{ADDITIONAL_DIR}/player_match_timeline_with_score.parquet') pt
                                     ON e.match_id = pt.match_id
                                     AND e.period = pt.period
                                     AND possession_team_id = pt.team_id
@@ -159,10 +72,10 @@ duckdb.sql(f"""
                        LEFT JOIN (SELECT player_id, SUM(duration) / 60 bad_possession_time, 
                                     SUM(CASE WHEN type = 'Dispossessed' THEN 1 ELSE 0 END) dispossessed,
                                     SUM(CASE WHEN type = 'Miscontrol' THEN 1 ELSE 0 END) miscontrols
-                                    FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
+                                    FROM read_parquet('{STATSBOMB_DIR}/events.parquet') 
                                     WHERE type IN ('Dispossessed', 'Miscontrol') 
                                     GROUP BY player_id) bad_poss
                           ON agg_player.player_id = bad_poss.player_id
-                        LEFT JOIN (SELECT player_id, SUM(duration) / 60 other_possession_time FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') WHERE type IN ('Dribble') GROUP BY player_id) other_poss
+                        LEFT JOIN (SELECT player_id, SUM(duration) / 60 other_possession_time FROM read_parquet('{STATSBOMB_DIR}/events.parquet') WHERE type IN ('Dribble') GROUP BY player_id) other_poss
                           ON agg_player.player_id = other_poss.player_id
-                    """).write_parquet('carry_k_means.parquet')
+                    """).write_parquet(output_path)

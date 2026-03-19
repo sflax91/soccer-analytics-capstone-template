@@ -1,64 +1,12 @@
 import duckdb
-import math
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
-
-# test_query = duckdb.sql(f"""
-#                         SELECT *
-#                         FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
-
-#                         """
-#                         )#.write_csv('match_investigate.csv')
-# print(test_query.columns)
-
-# test_query2 = duckdb.sql(f"""
-                        # SELECT FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE, AVG(shot_statsbomb_xg) avg_shot_statsbomb_xg, COUNT(id) number_of_shots, COUNT(match_id) number_of_matches
-                        # FROM get_shot_xg
-                        # GROUP BY FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE
-                        # ORDER BY AVG(shot_statsbomb_xg) DESC
-#                     """)
-
-# print(test_query2)
-
-# x_coords = duckdb.sql(f"""
-#                         SELECT location_x
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_x IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-
-# y_coords = duckdb.sql(f"""
-#                         SELECT location_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-#x_coords, y_coords = np.array(xy_coords).T
-
-
-#print(x_coords)
-
-#plt.scatter(x_coords, y_coords)
-#plt.savefig('another_test.png')
-
-
-# y_coords = duckdb.sql(f"""
-                      
-#                       SELECT distinct min_x, max_x, min_y, max_y
-#                       FROM (
-#                         SELECT match_id, MIN(round(location_x)) min_x, MAX(round(location_x)) max_x, MIN(round(location_y)) min_y, MAX(round(location_y)) max_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
-#                         GROUP BY match_id)
- 
-#                     """)
-# print(y_coords)
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "shot_k_means.parquet")
 
 #x coords
 #0-18 left box
@@ -98,7 +46,7 @@ project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-te
 duckdb.sql(f"""
                       with shot_percentiles as (
                       SELECT PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY DIST_TO_GOAL) shot_dist_percentiles
-                      FROM read_parquet('{project_location}/eda/shot_level_stats.parquet') 
+                      FROM read_parquet('{ADDITIONAL_DIR}/shot_level_stats.parquet') 
                       ),
                         get_percentile as (
                         SELECT shot_dist_percentiles[1] percentile_25, shot_dist_percentiles[2] percentile_50, shot_dist_percentiles[3] percentile_75 
@@ -119,7 +67,7 @@ duckdb.sql(f"""
                       ELSE 'Q4'
                       END AS shot_q
                       
-                      FROM read_parquet('{project_location}/eda/shot_level_stats.parquet') s
+                      FROM read_parquet('{ADDITIONAL_DIR}/shot_level_stats.parquet') s
                       ),
                       agg_match_shots as (
                       SELECT player_id, match_id, SUM(shot_first_time) shot_first_time, SUM(shot_follows_dribble) shot_follows_dribble, SUM(shot_open_goal) shot_open_goal, 
@@ -135,7 +83,7 @@ duckdb.sql(f"""
                       get_time_on_pitch as (
                       SELECT agg_match_shots.*, MINUTES_ON_PITCH
                       FROM agg_match_shots
-                      LEFT JOIN read_parquet('{project_location}/eda/player_match_on_pitch.parquet') player_min
+                      LEFT JOIN read_parquet('{ADDITIONAL_DIR}/player_match_on_pitch.parquet') player_min
                         ON agg_match_shots.player_id = player_min.player_id
                         AND agg_match_shots.match_id = player_min.match_id
                       ),
@@ -244,4 +192,4 @@ duckdb.sql(f"""
                       FROM stg_pct
                       LEFT JOIN final_zone
                         ON stg_pct.player_id = final_zone.player_id
-                    """).write_parquet('shot_k_means.parquet')
+                    """).write_parquet(output_path)

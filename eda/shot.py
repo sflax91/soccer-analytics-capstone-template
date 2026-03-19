@@ -1,9 +1,12 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "shot.parquet")
 
 duckdb.sql(f"""
                         SELECT match_id, id, index_num, period, timestamp, duration, location_x, location_y, possession, possession_team_id, team_id, 
@@ -18,7 +21,7 @@ duckdb.sql(f"""
                          CASE WHEN shot_redirect THEN 1 ELSE 0 END AS shot_redirect, 
                          CASE WHEN shot_saved_off_target THEN 1 ELSE 0 END AS shot_saved_off_target, 
                          CASE WHEN shot_saved_to_post THEN 1 ELSE 0 END AS shot_saved_to_post
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+                        FROM read_parquet('{STATSBOMB_DIR}/events.parquet') e
                         WHERE shot_end_location_x IS NOT NULL
-                                """).write_parquet('shot.parquet')
+                                """).write_parquet(output_path)
 

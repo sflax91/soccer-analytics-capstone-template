@@ -1,99 +1,12 @@
 import duckdb
-import math
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
-
-# test_query = duckdb.sql(f"""
-#                         SELECT *
-#                         FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
-
-#                         """
-#                         )#.write_csv('match_investigate.csv')
-# print(test_query.columns)
-
-# test_query2 = duckdb.sql(f"""
-                        # SELECT FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE, AVG(shot_statsbomb_xg) avg_shot_statsbomb_xg, COUNT(id) number_of_shots, COUNT(match_id) number_of_matches
-                        # FROM get_shot_xg
-                        # GROUP BY FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE
-                        # ORDER BY AVG(shot_statsbomb_xg) DESC
-#                     """)
-
-# print(test_query2)
-
-# x_coords = duckdb.sql(f"""
-#                         SELECT location_x
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_x IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-
-# y_coords = duckdb.sql(f"""
-#                         SELECT location_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-#x_coords, y_coords = np.array(xy_coords).T
-
-
-#print(x_coords)
-
-#plt.scatter(x_coords, y_coords)
-#plt.savefig('another_test.png')
-
-
-# y_coords = duckdb.sql(f"""
-                      
-#                       SELECT distinct min_x, max_x, min_y, max_y
-#                       FROM (
-#                         SELECT match_id, MIN(round(location_x)) min_x, MAX(round(location_x)) max_x, MIN(round(location_y)) min_y, MAX(round(location_y)) max_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
-#                         GROUP BY match_id)
- 
-#                     """)
-# print(y_coords)
-
-#x coords
-#0-18 left box
-#102-120 right box
-
-#y coords
-#40 +- (20.115)
-#60.115
-#19.885
-
-
-#left box
-
-#top left
-#(60.115, 0)
-#top right
-#(60.115, 18)
-#bottom left
-#(19.885, 0)
-#bottom right
-#(19.885, 18)
-
-
-#right box
-
-#top left
-#(60.115, 102)
-#top right
-#(60.115, 120)
-#bottom left
-#(19.885, 102)
-#bottom right
-#(19.885, 120)
-
-#halfway 60
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "pass_level_stats.parquet")
 
 duckdb.sql(f"""
                   with pass_events as (
@@ -118,7 +31,7 @@ duckdb.sql(f"""
                          CASE WHEN pass_straight = TRUE THEN 1 ELSE 0 END AS pass_straight, 
                          CASE WHEN pass_miscommunication = TRUE THEN 1 ELSE 0 END AS pass_miscommunication,
                       strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second) event_date
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                        FROM read_parquet('{STATSBOMB_DIR}/events.parquet')
                         WHERE pass_length IS NOT NULL
                       ),
                         get_score as (
@@ -134,16 +47,16 @@ duckdb.sql(f"""
                         ELSE NULL
                         END AS PLAYER_GROUPING_ID
                         FROM pass_events
-                        LEFT JOIN read_parquet('{project_location}/eda/event_proximity.parquet') ep
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/event_proximity.parquet') ep
                               ON pass_events.match_id = ep.match_id
                               AND pass_events.id = ep.id
-                        LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') off_team
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/team_composition.parquet') off_team
                           ON pass_events.match_id = off_team.match_id
                           AND pass_events.team_id = off_team.team_id
                           AND pass_events.period = off_team.period
                           AND pass_events.event_date >= off_team.interval_start
                           AND pass_events.event_date < off_team.interval_end
-                        LEFT JOIN read_parquet('{project_location}/eda/team_composition.parquet') def_team
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/team_composition.parquet') def_team
                           ON pass_events.match_id = def_team.match_id
                           AND pass_events.team_id != def_team.team_id
                           AND pass_events.period = def_team.period
@@ -151,23 +64,23 @@ duckdb.sql(f"""
                           AND pass_events.event_date < def_team.interval_end
                         LEFT JOIN (                        
                                     SELECT match_id, home_team_id team_id, 'H' HOME_AWAY
-                                    FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
+                                    FROM read_parquet('{STATSBOMB_DIR}/matches.parquet')
 
                                     UNION
 
                                     SELECT match_id, away_team_id team_id, 'A' HOME_AWAY
-                                    FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
+                                    FROM read_parquet('{STATSBOMB_DIR}/matches.parquet')
                                     ) home_away
                            ON pass_events.match_id = home_away.match_id 
                            AND pass_events.team_id = home_away.team_id 
                           LEFT JOIN (                        
                                     SELECT match_id, home_team_id team_id, 'H' HOME_AWAY
-                                    FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
+                                    FROM read_parquet('{STATSBOMB_DIR}/matches.parquet')
 
                                     UNION
 
                                     SELECT match_id, away_team_id team_id, 'A' HOME_AWAY
-                                    FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet')
+                                    FROM read_parquet('{STATSBOMB_DIR}/matches.parquet')
                                     ) home_away2
                            ON pass_events.match_id = home_away2.match_id 
                            AND pass_events.team_id != home_away2.team_id 
@@ -176,13 +89,13 @@ duckdb.sql(f"""
                                     SELECT match_id, period, home_goals home_score, away_goals away_score, 
                                     start_date,
                                     end_date
-                                    FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
+                                    FROM read_parquet('{ADDITIONAL_DIR}/match_score_timeline.parquet')
                                     ) score_check1
                             ON pass_events.match_id = score_check1.match_id
                             AND pass_events.period = score_check1.period
                             AND pass_events.event_date >= score_check1.start_date
                             AND pass_events.event_date < score_check1.end_date
-                          LEFT JOIN read_parquet('{project_location}/eda/period_lineups.parquet') pl
+                          LEFT JOIN read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') pl
                             ON pass_events.match_id = pl.match_id
                             AND pass_events.period = pl.period
                             AND pass_events.player_id = pl.player_id
@@ -197,8 +110,8 @@ duckdb.sql(f"""
                         ),
                         calc_pct as (
                         SELECT POSITION_TYPE, PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY pass_length) percentiles
-                        FROM read_parquet('{project_location}/eda/pass.parquet') p
-                        LEFT JOIN read_parquet('{project_location}/eda/player_match_timeline_with_score.parquet') pt
+                        FROM read_parquet('{ADDITIONAL_DIR}/pass.parquet') p
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/player_match_timeline_with_score.parquet') pt
                           ON p.player_id = pt.player_id
                           AND p.match_id = pt.match_id
                           AND p.period = pt.period
@@ -255,4 +168,4 @@ duckdb.sql(f"""
 
                         GROUP BY match_id, period, possession, possession_team_id, team_id, player_id, pass_recipient_id, EVENT_ZONE_START, EVENT_ZONE_END, OFF_TEAM_COMPOSITION_PK, 
                         DEF_TEAM_COMPOSITION_PK, OFF_HOME_AWAY, DEF_TEAM_ID, DEF_HOME_AWAY, home_score, away_score, player_advantage, PLAYER_GROUPING_ID, goal_diff, pass_height
-                    """).write_parquet('pass_level_stats.parquet')
+                    """).write_parquet(output_path)

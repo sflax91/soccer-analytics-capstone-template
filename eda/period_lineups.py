@@ -1,22 +1,23 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "period_lineups.parquet")
 
 duckdb.sql(f"""
                       with starting_xi as (
                          SELECT from_period period, 0 as minute, 0 as second, match_id, team_id, player_id, IFNULL(player_nickname, player_name) player, 'Starting XI' as type, position_name, 
                       NULL as substitution_replacement_id, NULL as substitution_replacement_name, NULL as substitution_outcome, NULL as bad_behaviour_card
-                         FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')
+                         FROM read_parquet('{STATSBOMB_DIR}/lineups.parquet')
                          WHERE from_period = 1 AND from_time = '00:00'
                       ),
                       other_events as (
                          SELECT period, minute, second, match_id, team_id, player_id, player, type, position, substitution_replacement_id, substitution_replacement_name, substitution_outcome, bad_behaviour_card
-                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                         FROM read_parquet('{STATSBOMB_DIR}/events.parquet')
                          WHERE type IN (
                                         'Half End',
                                         'Substitution'--,
@@ -29,7 +30,7 @@ duckdb.sql(f"""
                         SELECT tactical_shift.*
                         FROM (
                               SELECT period, minute, second, match_id, team_id, player_id, player, type, position, substitution_replacement_id, substitution_replacement_name, substitution_outcome, bad_behaviour_card
-                              FROM read_parquet('{project_location}/data/Statsbomb/events.parquet')
+                              FROM read_parquet('{STATSBOMB_DIR}/events.parquet')
                               WHERE type = 'Tactical Shift' ) tactical_shift
 
                         LEFT JOIN other_events
@@ -204,9 +205,9 @@ duckdb.sql(f"""
                          CASE WHEN POSITION_SIDE IN ('RC','LC') THEN 'C' ELSE POSITION_SIDE END AS POSITION_SIDE_ADJ, 
                          POSITION_TYPE_ALT, POSITION_BEHAVIOR, POSITION_TYPE, country_id
                         FROM match_intervals
-                        LEFT JOIN read_parquet('{project_location}/eda/position_type.parquet') pt
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/position_type.parquet') pt
                               ON match_intervals.position_name = pt.position_name
-                        LEFT JOIN (SELECT distinct player_id, match_id, country_id FROM read_parquet('{project_location}/data/Statsbomb/lineups.parquet')) get_country
+                        LEFT JOIN (SELECT distinct player_id, match_id, country_id FROM read_parquet('{STATSBOMB_DIR}/lineups.parquet')) get_country
                            ON match_intervals.player_id = get_country.player_id
                            AND match_intervals.match_id = get_country.match_id
 
@@ -239,4 +240,4 @@ duckdb.sql(f"""
                               AND gr.interval_end = gr2.interval_end
                               AND gr.player_id != gr2.player_id
                         GROUP BY gr.team_id,  gr.match_id, gr.period, gr.interval_start, gr.interval_end, gr.player_id, gr.country_id, gr.POSITION_SIDE_ADJ, gr.POSITION_TYPE, gr.POSITION_TYPE_ALT, gr.PLAYER_POSITION_SIDE_ADJ_ID_RANK, gr.POSITION_BEHAVIOR, gr.PLAYER_POSITION_TYPE_ALT_ID_RANK, gr.PLAYER_COUNTRY_ID_RANK, gr.PLAYER_SQUAD_RANK, gr.PLAYER_POSITION_TYPE_ID_RANK
-                    """).write_parquet('period_lineups.parquet')
+                    """).write_parquet(output_path)
