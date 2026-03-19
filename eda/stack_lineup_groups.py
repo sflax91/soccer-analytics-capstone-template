@@ -98,17 +98,17 @@ duckdb.sql(f"""
                         position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, position_10, position_11
                         FROM group_country
 
-                        UNION
+                        --UNION
 
-                        SELECT match_id, team_id, period, interval_start, interval_end, POSITION_TYPE_ALT GROUP_ATTRIBUTE, 'Position Type Alt' GROUP_NAME,
-                        position_1, position_2, position_3, position_4, position_5, position_6, NULL position_7, NULL position_8, NULL position_9, NULL position_10, NULL position_11
-                        FROM group_position_type_alt
+                        --SELECT match_id, team_id, period, interval_start, interval_end, POSITION_TYPE_ALT GROUP_ATTRIBUTE, 'Position Type Alt' GROUP_NAME,
+                        --position_1, position_2, position_3, position_4, position_5, position_6, NULL position_7, NULL position_8, NULL position_9, NULL position_10, NULL position_11
+                        --FROM group_position_type_alt
 
-                        UNION
+                        --UNION
 
-                        SELECT match_id, team_id, period, interval_start, interval_end, POSITION_SIDE_ADJ GROUP_ATTRIBUTE, 'Position Side' GROUP_NAME,
-                        position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, position_10, NULL position_11
-                        FROM group_position_side
+                        --SELECT match_id, team_id, period, interval_start, interval_end, POSITION_SIDE_ADJ GROUP_ATTRIBUTE, 'Position Side' GROUP_NAME,
+                        --position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, NULL position_10, NULL position_11
+                        --FROM group_position_side
                         )
 
                         SELECT *
