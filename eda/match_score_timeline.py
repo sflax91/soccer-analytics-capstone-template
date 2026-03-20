@@ -1,16 +1,19 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "match_score_timeline.parquet")
 
 duckdb.sql(f"""
                         with half_timestamps as (
                               SELECT distinct match_id, period, minute, 
                                 start_date + TO_MINUTES(minute) + TO_SECONDS(second) period_timestamp, type
                               FROM (SELECT distinct match_id, team_id, period, minute, second, timestamp, strptime('2026-01-01' , '%Y-%m-%d') start_date, type
-                                    FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
+                                    FROM read_parquet('{STATSBOMB_DIR}/events.parquet') 
                                     WHERE type IN ('Half End', 'Half Start')
                                     )
                                     ),
@@ -21,8 +24,8 @@ duckdb.sql(f"""
                                 CASE WHEN team_id = home_team_id THEN 1 ELSE 0 END AS home_goal,
                                 CASE WHEN team_id = away_team_id THEN 1 ELSE 0 END AS away_goal
 
-                                FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-                                LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') m
+                                FROM read_parquet('{STATSBOMB_DIR}/events.parquet') e
+                                LEFT JOIN read_parquet('{STATSBOMB_DIR}/matches.parquet') m
                                 ON e.match_id = m.match_id
                                 WHERE shot_outcome = 'Goal'
                                 )
@@ -53,5 +56,5 @@ duckdb.sql(f"""
                         )
                         SELECT match_id, period, home_rt home_goals, away_rt away_goals, goal_timestamp start_date, LEAD(goal_timestamp,1) OVER (partition by match_id, period order by match_id, period, goal_timestamp) end_date
                         FROM iso_significant_events
-                                """).write_parquet('match_score_timeline.parquet')
+                                """).write_parquet(output_path)
 

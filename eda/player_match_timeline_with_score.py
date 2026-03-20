@@ -1,18 +1,21 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "player_match_timeline_with_score.parquet")
 
 duckdb.sql(f"""
                       with score_info as (
                        SELECT match_id, period, start_date, end_date, home_goals, away_goals
-                       FROM read_parquet('{project_location}/eda/match_score_timeline.parquet')
+                       FROM read_parquet('{ADDITIONAL_DIR}/match_score_timeline.parquet')
                        ),
                        track_times as (
                        SELECT match_id, period, interval_start
-                       FROM read_parquet('{project_location}/eda/period_lineups.parquet')
+                       FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet')
 
                        UNION
 
@@ -50,12 +53,12 @@ duckdb.sql(f"""
                         AND track_times.period = score_info.period
                         AND track_times.interval_start >= score_info.start_date
                         AND track_times.interval_start < IFNULL(score_info.end_date, TODAY())
-                        LEFT JOIN read_parquet('{project_location}/eda/period_lineups.parquet') pl
+                        LEFT JOIN read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') pl
                         ON track_times.match_id = pl.match_id
                         AND track_times.period = pl.period
                         AND track_times.interval_start >= pl.interval_start
                         AND track_times.interval_start < IFNULL(pl.interval_end, TODAY())
-                        LEFT JOIN read_parquet('{project_location}/data/Statsbomb/matches.parquet') e
+                        LEFT JOIN read_parquet('{STATSBOMB_DIR}/matches.parquet') e
                           ON track_times.match_id = e.match_id
                         )
 
@@ -70,12 +73,12 @@ duckdb.sql(f"""
                        LEFT JOIN (                              
                               SELECT match_id, period, start_date + TO_MINUTES(minute) + TO_SECONDS(second) period_timestamp
                               FROM (SELECT distinct match_id, team_id, period, minute, second, timestamp, strptime('2026-01-01' , '%Y-%m-%d') start_date, type
-                                    FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
+                                    FROM read_parquet('{STATSBOMB_DIR}/events.parquet') 
                                     WHERE type IN ('Half End')
                                     )
                                     ) half_end
                                 ON iso_changes.match_id = half_end.match_id
                                 AND iso_changes.period = half_end.period
 
-                                """).write_parquet('player_match_timeline_with_score.parquet')
+                                """).write_parquet(output_path)
 

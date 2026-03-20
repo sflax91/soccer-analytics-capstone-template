@@ -1,16 +1,17 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "stack_lineup_groups.parquet")
 
 duckdb.sql(f"""
                         with find_position_type as (
                         SELECT team_id, match_id, period, interval_start, interval_end, player_id, PLAYER_POSITION_TYPE_ID_RANK, POSITION_TYPE
-                         FROM read_parquet('{project_location}/eda/period_lineups.parquet') 
+                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') 
                          ),
                         group_position_type as (
                         PIVOT (
@@ -24,7 +25,7 @@ duckdb.sql(f"""
                         ),
                         find_squad as (
                         SELECT team_id, match_id, period, interval_start, interval_end, player_id, PLAYER_SQUAD_RANK
-                         FROM read_parquet('{project_location}/eda/period_lineups.parquet') 
+                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') 
                          ), 
                          group_squad as (
                         PIVOT (
@@ -38,7 +39,7 @@ duckdb.sql(f"""
                         ),
                          find_country as (
                         SELECT team_id, match_id, period, interval_start, interval_end, player_id, PLAYER_COUNTRY_ID_RANK, country_id
-                         FROM read_parquet('{project_location}/eda/period_lineups.parquet')                          
+                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet')                          
                          ),
                          group_country as (
                         PIVOT (
@@ -52,7 +53,7 @@ duckdb.sql(f"""
                         ),
                          find_position_type_alt as (
                         SELECT team_id, match_id, period, interval_start, interval_end, player_id, PLAYER_POSITION_TYPE_ALT_ID_RANK, POSITION_TYPE_ALT
-                         FROM read_parquet('{project_location}/eda/period_lineups.parquet') 
+                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') 
                          ),
                          group_position_type_alt as (
 
@@ -67,7 +68,7 @@ duckdb.sql(f"""
                         ),
                          find_position_side as (
                         SELECT team_id, match_id, period, interval_start, interval_end, player_id, PLAYER_POSITION_SIDE_ADJ_ID_RANK, POSITION_SIDE_ADJ
-                         FROM read_parquet('{project_location}/eda/period_lineups.parquet') 
+                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') 
                          ),
                         group_position_side as (
 
@@ -98,17 +99,17 @@ duckdb.sql(f"""
                         position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, position_10, position_11
                         FROM group_country
 
-                        UNION
+                        --UNION
 
-                        SELECT match_id, team_id, period, interval_start, interval_end, POSITION_TYPE_ALT GROUP_ATTRIBUTE, 'Position Type Alt' GROUP_NAME,
-                        position_1, position_2, position_3, position_4, position_5, position_6, NULL position_7, NULL position_8, NULL position_9, NULL position_10, NULL position_11
-                        FROM group_position_type_alt
+                        --SELECT match_id, team_id, period, interval_start, interval_end, POSITION_TYPE_ALT GROUP_ATTRIBUTE, 'Position Type Alt' GROUP_NAME,
+                        --position_1, position_2, position_3, position_4, position_5, position_6, NULL position_7, NULL position_8, NULL position_9, NULL position_10, NULL position_11
+                        --FROM group_position_type_alt
 
-                        UNION
+                        --UNION
 
-                        SELECT match_id, team_id, period, interval_start, interval_end, POSITION_SIDE_ADJ GROUP_ATTRIBUTE, 'Position Side' GROUP_NAME,
-                        position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, position_10, NULL position_11
-                        FROM group_position_side
+                        --SELECT match_id, team_id, period, interval_start, interval_end, POSITION_SIDE_ADJ GROUP_ATTRIBUTE, 'Position Side' GROUP_NAME,
+                        --position_1, position_2, position_3, position_4, position_5, position_6, position_7, position_8, position_9, NULL position_10, NULL position_11
+                        --FROM group_position_side
                         )
 
                         SELECT *
@@ -117,4 +118,4 @@ duckdb.sql(f"""
 
       
 
-                    """).write_parquet('stack_lineup_groups.parquet')
+                    """).write_parquet(output_path)

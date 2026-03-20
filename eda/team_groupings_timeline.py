@@ -1,17 +1,18 @@
 import duckdb
-import math
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "team_groupings_timeline.parquet")
 
 team_groups = duckdb.sql(f"""
                          with get_all_id as (
                         SELECT distinct match_id, team_id, period, interval_start, interval_end, GROUP_ATTRIBUTE, GROUP_NAME, UNIT_GROUPING_RANK_ID
-                         FROM read_parquet('{project_location}/eda/stack_lineup_groups.parquet')  st
-                         LEFT JOIN read_parquet('{project_location}/eda/unique_player_combos.parquet') pc
+                         FROM read_parquet('{ADDITIONAL_DIR}/stack_lineup_groups.parquet')  st
+                         LEFT JOIN read_parquet('{ADDITIONAL_DIR}/unique_player_combos.parquet') pc
                               ON IFNULL(st.position_1,-1) = IFNULL(pc.position_1,-1) 
                               AND IFNULL(st.position_2,-1) = IFNULL(pc.position_2,-1) 
                               AND IFNULL(st.position_3,-1) = IFNULL(pc.position_3,-1) 
@@ -121,5 +122,5 @@ team_groups = duckdb.sql(f"""
 
       
 
-                    """).write_parquet('team_groupings_timeline.parquet')
+                    """).write_parquet(output_path)
 

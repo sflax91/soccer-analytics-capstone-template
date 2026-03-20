@@ -1,64 +1,12 @@
 import duckdb
-import math
-import matplotlib.pyplot as plt
-import numpy as np
+from pathlib import Path
 
-#IF NOT INSTALLED THEN INSTALL spatial
-
-project_location = 'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template'
-#'C://Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/data'
-#'C:/Users/Tyler/Documents/GitHub/soccer-analytics-capstone-template/eda'
-
-# test_query = duckdb.sql(f"""
-#                         SELECT *
-#                         FROM read_parquet('{project_location}/data/Statsbomb/matches.parquet') 
-
-#                         """
-#                         )#.write_csv('match_investigate.csv')
-# print(test_query.columns)
-
-# test_query2 = duckdb.sql(f"""
-                        # SELECT FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE, AVG(shot_statsbomb_xg) avg_shot_statsbomb_xg, COUNT(id) number_of_shots, COUNT(match_id) number_of_matches
-                        # FROM get_shot_xg
-                        # GROUP BY FULL_SQUAD_GROUPING_ID, OFFENSE_DEFENSE
-                        # ORDER BY AVG(shot_statsbomb_xg) DESC
-#                     """)
-
-# print(test_query2)
-
-# x_coords = duckdb.sql(f"""
-#                         SELECT location_x
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_x IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-
-# y_coords = duckdb.sql(f"""
-#                         SELECT location_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
- 
-#                     """).df()
-#x_coords, y_coords = np.array(xy_coords).T
-
-
-#print(x_coords)
-
-#plt.scatter(x_coords, y_coords)
-#plt.savefig('another_test.png')
-
-
-# y_coords = duckdb.sql(f"""
-                      
-#                       SELECT distinct min_x, max_x, min_y, max_y
-#                       FROM (
-#                         SELECT match_id, MIN(round(location_x)) min_x, MAX(round(location_x)) max_x, MIN(round(location_y)) min_y, MAX(round(location_y)) max_y
-#                         FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
-#                         WHERE location_y IS NOT NULL --AND match_id = 7542
-#                         GROUP BY match_id)
- 
-#                     """)
-# print(y_coords)
+EDA_DIR = Path(__file__).parent.parent / "eda"
+DATA_DIR = Path(__file__).parent.parent / "data"
+POLYMARKET_DIR = DATA_DIR / "Polymarket"
+STATSBOMB_DIR = DATA_DIR / "Statsbomb"
+ADDITIONAL_DIR = DATA_DIR / "Additional"
+output_path = str(ADDITIONAL_DIR / "event_proximity.parquet")
 
 #x coords
 #0-18 left box
@@ -104,7 +52,7 @@ duckdb.sql(f"""
                       CASE WHEN location_x >= 60 THEN 'R'
                       ELSE 'L'
                       END AS SHOOTING_SIDE
-                        FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') e
+                        FROM read_parquet('{STATSBOMB_DIR}/events.parquet') e
                         WHERE type = 'Shot'
                         ),
                         bad_matches_shot_side as (
@@ -226,7 +174,7 @@ duckdb.sql(f"""
                             WHEN UPPER(type) = 'SHOT' THEN shot_end_location_y
                             ELSE NULL
                             END AS end_location_y
-                            FROM read_parquet('{project_location}/data/Statsbomb/events.parquet') 
+                            FROM read_parquet('{STATSBOMB_DIR}/events.parquet') 
                             
                             ) e
                         WHERE location_y IS NOT NULL --AND possession_team_id = team_id
@@ -543,4 +491,4 @@ duckdb.sql(f"""
                     SELECT match_id, id, period, team_id, possession_team_id, PITCH_THIRD_ADJ, PITCH_THIRD_END_ADJ, PROGRESS_TYPE, DISTANCE_TRAVELED, STARTING_DISTANCE_TO_GOAL_SHOOTING_ON, STARTING_DISTANCE_TO_GOAL_DEFENDING, PROGRESS_TO_GOAL_SHOOTING_ON, PROGRESS_TO_GOAL_DEFENDING,
                             PITCH_ORIENTATION, DIST_TO_GOAL, GOAL_AREA_DIST, PROX_BOX, THIRDS_ADVANCED, HORIZONTAL_BOX || VERTICAL_BOX EVENT_ZONE_START , HORIZONTAL_BOX_END || VERTICAL_BOX_END EVENT_ZONE_END
                     FROM event_zones
-                    """).write_parquet('event_proximity.parquet')
+                    """).write_parquet(output_path)
