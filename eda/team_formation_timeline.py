@@ -19,7 +19,8 @@ duckdb.sql(f"""
                               CASE WHEN POSITION_TYPE = 'F' THEN 1 ELSE 0 END AS FORWARDS,
                               CASE WHEN POSITION_TYPE = 'F' AND POSITION_TYPE_ALT = 'CF' THEN 1 ELSE 0 END AS CENTER_FORWARDS,
                               CASE WHEN POSITION_TYPE = 'M' AND POSITION_BEHAVIOR = 'A' THEN 1 ELSE 0 END AS ATTACKING_MIDFIELDERS,
-                              CASE WHEN POSITION_TYPE = 'M' AND POSITION_BEHAVIOR = 'D' THEN 1 ELSE 0 END AS DEFENDING_MIDFIELDERS
+                              CASE WHEN POSITION_TYPE = 'M' AND POSITION_BEHAVIOR = 'D' THEN 1 ELSE 0 END AS DEFENDING_MIDFIELDERS,
+                              CASE WHEN POSITION_TYPE_ALT = 'W' THEN 1 ELSE 0 END AS WINGS
                               FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet')  mi
                               WHERE player_id IS NOT NULL
                               ),
@@ -31,7 +32,8 @@ duckdb.sql(f"""
                               SUM(FORWARDS) FORWARDS, 
                               SUM(ATTACKING_MIDFIELDERS) ATTACKING_MIDFIELDERS,
                               SUM(DEFENDING_MIDFIELDERS) DEFENDING_MIDFIELDERS,
-                              SUM(CENTER_FORWARDS) CENTER_FORWARDS
+                              SUM(CENTER_FORWARDS) CENTER_FORWARDS,
+                              SUM(WINGS) WINGS
                               FROM get_player_type
                               GROUP BY match_id, team_id, period, interval_start, interval_end
                               ), 
@@ -40,7 +42,10 @@ duckdb.sql(f"""
                               CASE
                               WHEN FORWARDS = 0 THEN NULL 
                               WHEN FORWARDS > 0 
-                                 AND CENTER_FORWARDS > 0 AND FORWARDS != CENTER_FORWARDS THEN CAST(CENTER_FORWARDS as varchar) || '-' || CAST(CENTER_FORWARDS as varchar) ELSE CAST(FORWARDS as varchar) END AS ATTACK_FORMATION,
+                                 AND CENTER_FORWARDS > 0 AND WINGS = 0
+                                 AND FORWARDS - CENTER_FORWARDS  > 0
+                                THEN CAST(CENTER_FORWARDS as varchar) || '-' || CAST(FORWARDS - CENTER_FORWARDS as varchar)
+                                ELSE CAST(FORWARDS as varchar) END AS ATTACK_FORMATION,
                               CASE 
                                  WHEN DEFENDING_MIDFIELDERS > 0 AND ATTACKING_MIDFIELDERS > 0 AND MIDFIELDERS - DEFENDING_MIDFIELDERS - ATTACKING_MIDFIELDERS > 0 
                                  THEN CAST(DEFENDING_MIDFIELDERS as varchar) || '-' || CAST(MIDFIELDERS - DEFENDING_MIDFIELDERS - ATTACKING_MIDFIELDERS as varchar) || '-' || CAST(ATTACKING_MIDFIELDERS as varchar)
