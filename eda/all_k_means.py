@@ -9,7 +9,38 @@ ADDITIONAL_DIR = DATA_DIR / "Additional"
 output_path = str(ADDITIONAL_DIR / "all_k_means.parquet")
 
 duckdb.sql(f"""
-                      SELECT every_player.player_id, pct_shot_first_time, pct_shot_follows_dribble, pct_shot_open_goal, pct_shot_dominant_foot, 
+                      with id_leagues as (
+                      SELECT player_id, 
+                      CASE WHEN UPPER(competition) LIKE '%WOMEN%' THEN 1
+                      WHEN competition = 'NWSL' THEN 1
+                      ELSE 0
+                      END AS womens_game
+                      --player_id, is_international, competition
+                      FROM (SELECT distinct match_id, player_id
+                            FROM read_parquet('{STATSBOMB_DIR}/lineups.parquet')) l
+                      INNER JOIN read_parquet('{STATSBOMB_DIR}/matches.parquet') m
+                        ON l.match_id = m.match_id
+                        ),
+                        aggregate_leagues as (
+                      SELECT player_id, SUM(womens_game) womens_game
+                      FROM id_leagues
+                      GROUP BY player_id
+                      ),
+                      man_woman as (
+                      SELECT player_id, 
+                      CASE 
+                      WHEN womens_game > 0 THEN 'W'
+                      WHEN  womens_game = 0 THEN 'M'
+                      ELSE NULL
+                      END AS MEN_WOMEN
+                      FROM aggregate_leagues
+                      )
+           
+                      SELECT every_player.player_id, MEN_WOMEN, 
+                      pct_shot_first_time, 
+                      pct_shot_follows_dribble, 
+                      pct_shot_open_goal, 
+                      pct_shot_dominant_foot, 
                       pct_shot_header, pct_shot_into_goal pct_shot_goal_scored, pct_shot_saved pct_shot_taken_saved, shots_per_minute, 
                       goals_over_expected, pct_shot_q1 pct_shot_from_q1_dist, pct_shot_q2 pct_shot_from_q2_dist, 
                       pct_shot_q3 pct_shot_from_q3_dist, pct_shot_q4 pct_shot_from_q4_dist, pct_shots_taken_in_arc, pct_of_goals_from_arc, pct_shots_taken_in_box, pct_of_goals_from_box, 
@@ -47,4 +78,6 @@ duckdb.sql(f"""
                         ON every_player.player_id = d.player_id
                       LEFT JOIN read_parquet('{ADDITIONAL_DIR}/pass_k_means.parquet') p
                         ON every_player.player_id = p.player_id
+                      LEFT JOIN man_woman
+                        ON every_player.player_id = man_woman.player_id
                     """).write_parquet(output_path)
