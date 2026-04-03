@@ -9,7 +9,34 @@ ADDITIONAL_DIR = DATA_DIR / "Additional"
 output_path = str(ADDITIONAL_DIR / "gk_k_means.parquet")
 
 duckdb.sql(f"""
-                      with shot_percentiles as (
+                      with id_leagues as (
+                      SELECT player_id, 
+                      CASE WHEN UPPER(competition) LIKE '%WOMEN%' THEN 1
+                      WHEN competition = 'NWSL' THEN 1
+                      ELSE 0
+                      END AS womens_game
+                      --player_id, is_international, competition
+                      FROM (SELECT distinct match_id, player_id
+                            FROM read_parquet('{STATSBOMB_DIR}/lineups.parquet')) l
+                      INNER JOIN read_parquet('{STATSBOMB_DIR}/matches.parquet') m
+                        ON l.match_id = m.match_id
+                        ),
+                        aggregate_leagues as (
+                      SELECT player_id, SUM(womens_game) womens_game
+                      FROM id_leagues
+                      GROUP BY player_id
+                      ),
+                      man_woman as (
+                      SELECT player_id, 
+                      CASE 
+                      WHEN womens_game > 0 THEN 'W'
+                      WHEN  womens_game = 0 THEN 'M'
+                      ELSE NULL
+                      END AS MEN_WOMEN
+                      FROM aggregate_leagues
+                      ),
+                      
+                      shot_percentiles as (
                       SELECT PERCENTILE_DISC([0.25,0.5,0.75]) WITHIN GROUP (ORDER BY shot_statsbomb_xg) percentiles
                       FROM read_parquet('{ADDITIONAL_DIR}/gk_stats.parquet')
                       ),
@@ -58,7 +85,8 @@ duckdb.sql(f"""
                         ON match_level.match_id - pt.match_id
                         AND gk_player_id = player_id
                       WHERE IFNULL(MINUTES_ON_PITCH,0) > 0
-                      )
+                      ),
+                      compute_stats as (
                       SELECT gk_player_id, 
                       SUM(gk_save) / SUM(gk_shot_faced) gk_shot_save_pct,
                       CASE 
@@ -82,4 +110,10 @@ duckdb.sql(f"""
                       
                       FROM get_time
                       GROUP BY gk_player_id
+                      )
+
+                      SELECT compute_stats.*, MEN_WOMEN
+                      FROM compute_stats
+                      LEFT JOIN man_woman
+                        ON gk_player_id = player_id
                     """).write_parquet(output_path)
