@@ -13,6 +13,7 @@ duckdb.sql(f"""
                                CASE 
                                WHEN UPPER(POSITION_TYPE_ALT) IN ('WB', 'B') THEN 'B'
                                WHEN UPPER(POSITION_TYPE_ALT) IN ('F', 'W', 'CF') THEN 'F'
+                                WHEN UPPER(position_name) LIKE '%STRIKER%' THEN 'F'
                                 WHEN UPPER(POSITION_TYPE_ALT) IN ('GK') THEN 'GK'
                                WHEN UPPER(POSITION_TYPE_ALT) IN ('M') THEN 'M'
                                ELSE NULL
