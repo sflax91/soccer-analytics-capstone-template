@@ -77,21 +77,33 @@ duckdb.sql(f"""
 
                         get_half as (
                                                 
-                        SELECT distinct event_times.period, event_times.event_timestamp, event_times.match_id, team_id, player_id, player, type, position_name
+                        SELECT distinct event_times.period, event_times.event_timestamp, event_times.match_id, all_players.team_id, all_players.player_id, event_times.type, position_name, period_removed
                         FROM (
                               SELECT period, MAX(strptime('2026-01-01' , '%Y-%m-%d') + TO_MINUTES(minute) + TO_SECONDS(second)) event_timestamp, match_id, type
                               FROM other_events
                               WHERE type IN ('Half Start', 'Half End')
                               GROUP BY  match_id, type, period
                               ) event_times
-                        INNER JOIN (SELECT distinct match_id, team_id, player_id, player, event_timestamp, position_name, period
+                        INNER JOIN (SELECT distinct match_id, team_id, player_id, event_timestamp, position_name, period, type
                                        FROM stack_changes
+                                       
                                     ) all_players
                               ON event_times.match_id = all_players.match_id
                               AND event_times.period >= all_players.period
                               AND event_times.event_timestamp >= all_players.event_timestamp
-                        WHERE NOT (event_times.match_id = all_players.match_id AND event_times.period = all_players.period AND event_times.event_timestamp = all_players.event_timestamp)
-                        AND player_id IS NOT NULL
+                        LEFT JOIN (SELECT match_id, team_id, player_id, period period_removed, event_timestamp timestamp_removed FROM stack_changes WHERE type IN ('Substitution - Off', 'Half End', 'Second Yellow', 'Red Card', 'Bad Behaviour')) check_removal
+                          ON event_times.match_id = check_removal.match_id
+                          AND all_players.team_id = check_removal.team_id
+                          AND all_players.player_id = check_removal.player_id
+                        WHERE (NOT (event_times.match_id = all_players.match_id AND event_times.period = all_players.period AND event_times.event_timestamp = all_players.event_timestamp))
+                        AND all_players.player_id IS NOT NULL
+                        AND (
+                              (event_times.type = 'Half Start' AND event_times.period < IFNULL(period_removed,9999)) 
+                              OR 
+                              (event_times.type = 'Half Start' AND event_times.period = IFNULL(period_removed,9999) AND event_times.event_timestamp < IFNULL(timestamp_removed,CURRENT_TIMESTAMP))
+                              OR
+                              (event_times.type = 'Half End' AND event_times.period < IFNULL(period_removed,9999))
+                              )
                         ),
 
 
@@ -100,37 +112,38 @@ duckdb.sql(f"""
                         CASE 
                         WHEN IFNULL(LAG(period,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp),-1) != IFNULL(period,-1) THEN 1
                         WHEN IFNULL(LAG(position_name,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp),'-') != IFNULL(position_name,'-') THEN 1
+                        WHEN IFNULL(LAG(player_id,1) OVER (PARTITION BY match_id, team_id, position_name, period ORDER BY match_id, team_id, position_name, period, event_timestamp),-1) != IFNULL(player_id,-1) THEN 1
                         ELSE 0
                         END AS lineup_change
                         FROM stack_changes
                         WHERE player_id IS NOT NULL
                         ),
                         iso_changes as (
-                        SELECT distinct period, event_timestamp, match_id, team_id, player_id, player, type, position_name
+                        SELECT distinct period, event_timestamp, match_id, team_id, player_id, type, position_name
                         FROM id_lineup_change
                         WHERE lineup_change = 1
 
                         UNION
 
-                        SELECT distinct period, event_timestamp, match_id, team_id, player_id, player, type, position_name
+                        SELECT distinct period, event_timestamp, match_id, team_id, player_id, type, position_name
                         FROM get_half
                         
                         ),
                         find_end as (
                         SELECT period, event_timestamp, 
                         LEAD(event_timestamp,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) next_event_timestamp,
-                        match_id, team_id, player_id, player, type, 
+                        match_id, team_id, player_id, type, 
                         LEAD(type,1) OVER (PARTITION BY match_id, team_id, player_id, period ORDER BY match_id, team_id, player_id, period, event_timestamp) next_event_type, position_name
                         FROM iso_changes
                         ),
                         initial_intervals as (
-                        SELECT distinct period, event_timestamp interval_start, next_event_timestamp interval_end, match_id, team_id, player_id, player, type, next_event_type, position_name
+                        SELECT distinct period, event_timestamp interval_start, next_event_timestamp interval_end, match_id, team_id, player_id, type, next_event_type, position_name
                         FROM find_end
                         WHERE type NOT IN ('Substitution - Off', 'Half End', 'Second Yellow', 'Red Card', 'Bad Behaviour')
                         AND player_id IS NOT NULL
                         ),
                         apply_other_attr as (
-                        SELECT get_all_players.match_id, 
+                        SELECT distinct get_all_players.match_id, 
                         get_all_players.team_id, 
                         get_all_players.period, 
                         get_all_players.interval_start, 
@@ -165,7 +178,7 @@ duckdb.sql(f"""
                            ON get_all_players.player_id = mc.player_id
                         LEFT JOIN read_parquet('{ADDITIONAL_DIR}/Womens_Clustering.parquet') wc
                            ON get_all_players.player_id = wc.player_id
-                        WHERE interval_start < interval_end
+                        WHERE interval_start < interval_end AND IFNULL(wc.cluster, mc.cluster) IS NOT NULL
                         ),
                         agg_attributes as (
                         SELECT match_id, team_id, period, interval_start, interval_end, MEN_WOMEN,
@@ -178,11 +191,15 @@ duckdb.sql(f"""
                         SUM(CASE WHEN player_cluster = 1 THEN 1 ELSE 0 END) AS C1,
                         SUM(CASE WHEN player_cluster = 2 THEN 1 ELSE 0 END) AS C2,
                         SUM(CASE WHEN player_cluster = 3 THEN 1 ELSE 0 END) AS C3,
-                        SUM(CASE WHEN player_cluster = 4 THEN 1 ELSE 0 END) AS C4
+                        SUM(CASE WHEN player_cluster = 4 THEN 1 ELSE 0 END) AS C4,
+                        SUM(CASE WHEN player_cluster = 5 THEN 1 ELSE 0 END) AS C5,
+                        COUNT(*) PLAYERS_ON_PITCH
                         FROM apply_other_attr
 
+                        
                         GROUP BY match_id, team_id, period, interval_start, interval_end, MEN_WOMEN
                         )
                         SELECT agg_attributes.*, RANK() OVER (ORDER BY match_id, team_id, period, interval_start) GROUPING_PK
                         FROM agg_attributes
+                        WHERE match_id != 3900519
                     """).write_parquet(output_path)

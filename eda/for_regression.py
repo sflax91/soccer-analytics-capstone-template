@@ -17,13 +17,13 @@ duckdb.sql(f"""
                       ),
                       add_groups_possession as (
                       SELECT distinct event_data.match_id, event_data.period, event_data.possession, 
-                      off_lineup.GROUPING_PK OFF_GROUPING_PK, def_lineup.GROUPING_PK DEF_GROUPING_PK, total_xg, possession_type, n_shots, duration_seconds,
+                      off_lineup.MEN_WOMEN OFF_MEN_WOMEN, off_lineup.GROUPING_PK OFF_GROUPING_PK, def_lineup.GROUPING_PK DEF_GROUPING_PK, total_xg, possession_type, n_shots, duration_seconds,
 
                       off_lineup.BACKS OFF_BACKS, off_lineup.MIDFIELDERS OFF_MIDFIELDERS, off_lineup.FORWARDS OFF_FORWARDS, off_lineup.GOALKEEPER OFF_GOALKEEPER, 
-                      off_lineup.C0 OFF_C0, off_lineup.C1 OFF_C1, off_lineup.C2 OFF_C2, off_lineup.C3 OFF_C3, off_lineup.C4 OFF_C4,
+                      off_lineup.C0 OFF_C0, off_lineup.C1 OFF_C1, off_lineup.C2 OFF_C2, off_lineup.C3 OFF_C3, off_lineup.C4 OFF_C4, off_lineup.C5 OFF_C5,
 
-                      def_lineup.BACKS DEF_BACKS, def_lineup.MIDFIELDERS DEF_MIDFIELDERS, def_lineup.FORWARDS DEF_FORWARDS, def_lineup.GOALKEEPER DEF_GOALKEEPER, 
-                      def_lineup.C0 DEF_C0, def_lineup.C1 DEF_C1, def_lineup.C2 DEF_C2, def_lineup.C3 DEF_C3, def_lineup.C4 DEF_C4
+                      def_lineup.MEN_WOMEN DEF_MEN_WOMEN, def_lineup.BACKS DEF_BACKS, def_lineup.MIDFIELDERS DEF_MIDFIELDERS, def_lineup.FORWARDS DEF_FORWARDS, def_lineup.GOALKEEPER DEF_GOALKEEPER, 
+                      def_lineup.C0 DEF_C0, def_lineup.C1 DEF_C1, def_lineup.C2 DEF_C2, def_lineup.C3 DEF_C3, def_lineup.C4 DEF_C4, def_lineup.C5 DEF_C5
                       
 
                       FROM event_data
@@ -46,13 +46,13 @@ duckdb.sql(f"""
                      ),
                      agg_all as (
                      SELECT possession_type, 
-                     OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4,
-                     DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, SUM(total_xg) total_xg, SUM(n_shots) n_shots, SUM(duration_seconds) / 60 duration_minutes
+                     OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5,
+                     DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, SUM(total_xg) total_xg, SUM(n_shots) n_shots, SUM(duration_seconds) / 60 duration_minutes
                      FROM add_groups_possession
                      WHERE OFF_GROUPING_PK IS NOT NULL AND possession_type IS NOT NULL
                      GROUP BY possession_type, 
-                     OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4,
-                     DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4
+                     OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5,
+                     DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5
                      )
                      SELECT *
                      FROM agg_all
