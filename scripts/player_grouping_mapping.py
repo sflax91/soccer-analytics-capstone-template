@@ -7,7 +7,7 @@ ANALYSIS_DIR = Path(__file__).parent.parent / "analysis"
 POLYMARKET_DIR = DATA_DIR / "Polymarket"
 STATSBOMB_DIR = DATA_DIR / "Statsbomb"
 ADDITIONAL_DIR = DATA_DIR / "Additional"
-output_path = str(ANALYSIS_DIR / "player_grouping_mapping.parquet")
+output_path = str(ADDITIONAL_DIR / "player_grouping_mapping.parquet")
 
 duckdb.sql(f"""
                       SELECT pl.*, cluster, pl_adv.MEN_WOMEN, BACKS, MIDFIELDERS, FORWARDS, GOALKEEPER, C0, C1, C2, C3, PLAYERS_ON_PITCH, GROUPING_PK

@@ -148,7 +148,6 @@ duckdb.sql(f"""
                         get_all_players.period, 
                         get_all_players.interval_start, 
                         get_all_players.interval_end, 
-                        get_all_players.player_id, 
                         POSITION_TYPE, POSITION_TYPE_ALT, POSITION_BEHAVIOR
                         FROM (
                               SELECT team_checkpoints.*, player_id, position_name

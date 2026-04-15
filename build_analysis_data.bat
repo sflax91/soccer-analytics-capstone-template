@@ -56,3 +56,10 @@ del "%~dp0data\Additional\gk_k_means.parquet"
 
 python %~dp0Scripts\period_lineups_adv.py && python %~dp0Scripts\for_regression.py
 
+python %~dp0Scripts\top_level_country_stats.py
+python %~dp0Scripts\player_country_grouping.py
+python %~dp0Scripts\agg_country_xg.py
+python %~dp0Scripts\player_grouping_mapping.py
+python %~dp0Scripts\country_grouping.py
+python %~dp0Scripts\grouping_xg.py
+

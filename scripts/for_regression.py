@@ -21,9 +21,11 @@ duckdb.sql(f"""
 
                       off_lineup.BACKS OFF_BACKS, off_lineup.MIDFIELDERS OFF_MIDFIELDERS, off_lineup.FORWARDS OFF_FORWARDS, off_lineup.GOALKEEPER OFF_GOALKEEPER, 
                       off_lineup.C0 OFF_C0, off_lineup.C1 OFF_C1, off_lineup.C2 OFF_C2, off_lineup.C3 OFF_C3, off_lineup.C4 OFF_C4, off_lineup.C5 OFF_C5, off_lineup.PLAYERS_ON_PITCH OFF_PLAYERS_ON_PITCH, 
+                     off_lineup.GK_C0 OFF_GK_C0, off_lineup.GK_C1 OFF_GK_C1, off_lineup.GK_C2 OFF_GK_C2,
 
                       def_lineup.team_id DEF_TEAM_ID, def_lineup.MEN_WOMEN DEF_MEN_WOMEN, def_lineup.BACKS DEF_BACKS, def_lineup.MIDFIELDERS DEF_MIDFIELDERS, def_lineup.FORWARDS DEF_FORWARDS, def_lineup.GOALKEEPER DEF_GOALKEEPER, 
-                      def_lineup.C0 DEF_C0, def_lineup.C1 DEF_C1, def_lineup.C2 DEF_C2, def_lineup.C3 DEF_C3, def_lineup.C4 DEF_C4, def_lineup.C5 DEF_C5, off_lineup.PLAYERS_ON_PITCH DEF_PLAYERS_ON_PITCH
+                      def_lineup.C0 DEF_C0, def_lineup.C1 DEF_C1, def_lineup.C2 DEF_C2, def_lineup.C3 DEF_C3, def_lineup.C4 DEF_C4, def_lineup.C5 DEF_C5, off_lineup.PLAYERS_ON_PITCH DEF_PLAYERS_ON_PITCH,
+                      def_lineup.GK_C0 DEF_GK_C0, def_lineup.GK_C1 DEF_GK_C1, def_lineup.GK_C2 DEF_GK_C2,
                       
                       FROM event_data
                       LEFT JOIN read_parquet('{ADDITIONAL_DIR}/period_lineups_adv.parquet') off_lineup
@@ -42,8 +44,8 @@ duckdb.sql(f"""
                      ),
                      agg_all as (
                      SELECT add_groups_possession.match_id, possession_type, add_groups_possession.period, add_groups_possession.possession, 
-                     OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_PLAYERS_ON_PITCH,
-                     DEF_TEAM_ID, DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_PLAYERS_ON_PITCH, SUM(total_xg) total_xg, SUM(n_shots) n_shots, SUM(duration_seconds) / 60 duration_minutes
+                     OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_PLAYERS_ON_PITCH, OFF_GK_C0, OFF_GK_C1, OFF_GK_C2,
+                     DEF_TEAM_ID, DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_PLAYERS_ON_PITCH, DEF_GK_C0, DEF_GK_C1, DEF_GK_C2, SUM(total_xg) total_xg, SUM(n_shots) n_shots, SUM(duration_seconds) / 60 duration_minutes
                      FROM add_groups_possession
                      LEFT JOIN read_parquet('{ADDITIONAL_DIR}/possession_types.parquet') pt
                         ON add_groups_possession.match_id = pt.match_id
@@ -52,13 +54,13 @@ duckdb.sql(f"""
                         AND add_groups_possession.OFF_TEAM_ID = pt.possession_team_id
                      WHERE OFF_GROUPING_PK IS NOT NULL AND possession_type IS NOT NULL
                      GROUP BY add_groups_possession.match_id, possession_type, add_groups_possession.period, add_groups_possession.possession, 
-                     DEF_TEAM_ID, OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_PLAYERS_ON_PITCH,
-                     DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_PLAYERS_ON_PITCH
+                     DEF_TEAM_ID, OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_PLAYERS_ON_PITCH, OFF_GK_C0, OFF_GK_C1, OFF_GK_C2,
+                     DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_PLAYERS_ON_PITCH, DEF_GK_C0, DEF_GK_C1, DEF_GK_C2
                      ),
                      iso_first_row as (
                      SELECT distinct match_id, possession_type, period, possession, 
-                            OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_PLAYERS_ON_PITCH,
-                            DEF_TEAM_ID, DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_PLAYERS_ON_PITCH, total_xg, n_shots, duration_minutes
+                            OFF_TEAM_ID, OFF_MEN_WOMEN, OFF_BACKS, OFF_MIDFIELDERS, OFF_FORWARDS, OFF_GOALKEEPER, OFF_C0, OFF_C1, OFF_C2, OFF_C3, OFF_C4, OFF_C5, OFF_GK_C0, OFF_GK_C1, OFF_GK_C2, OFF_PLAYERS_ON_PITCH,
+                            DEF_TEAM_ID, DEF_MEN_WOMEN, DEF_BACKS, DEF_MIDFIELDERS, DEF_FORWARDS, DEF_GOALKEEPER, DEF_C0, DEF_C1, DEF_C2, DEF_C3, DEF_C4, DEF_C5, DEF_GK_C0, DEF_GK_C1, DEF_GK_C2, DEF_PLAYERS_ON_PITCH, total_xg, n_shots, duration_minutes
                      FROM (
                             SELECT iso_full_squad.*, RANK() OVER (PARTITION BY match_id, off_team_id, period, possession ORDER BY match_id, off_team_id, period, possession, duration_minutes DESC) RANK_ROW
                             FROM (

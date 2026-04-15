@@ -24,13 +24,23 @@ duckdb.sql(f"""
                         SUM(CASE WHEN IFNULL(mc.cluster, wc.cluster) = 2 THEN 1 ELSE 0 END) AS C2,
                         SUM(CASE WHEN IFNULL(mc.cluster, wc.cluster) = 3 THEN 1 ELSE 0 END) AS C3,
                         SUM(CASE WHEN IFNULL(mc.cluster, wc.cluster) = 4 THEN 1 ELSE 0 END) AS C4,
-                        SUM(CASE WHEN IFNULL(mc.cluster, wc.cluster) = 5 THEN 1 ELSE 0 END) AS C5
+                        SUM(CASE WHEN IFNULL(mc.cluster, wc.cluster) = 5 THEN 1 ELSE 0 END) AS C5,
+
+
+                        SUM(CASE WHEN mc_gk.cluster = 0 THEN 1 ELSE 0 END) AS GK_C0,
+                        SUM(CASE WHEN mc_gk.cluster = 1 THEN 1 ELSE 0 END) AS GK_C1,
+                        SUM(CASE WHEN mc_gk.cluster = 2 THEN 1 ELSE 0 END) AS GK_C2
+           
+
                         FROM read_parquet('{ADDITIONAL_DIR}/period_lineups.parquet') pl
                         LEFT JOIN read_parquet('{STATSBOMB_DIR}/matches.parquet') m
                             ON pl.match_id = m.match_id
                         LEFT JOIN (SELECT distinct player_id, cluster FROM read_parquet('{ANALYSIS_DIR}/Mens_Clustering.parquet')) mc
-                            ON gender = 'male'
+                            ON gender = 'male' AND POSITION_TYPE != 'GK'
                             AND pl.player_id = mc.player_id
+                        LEFT JOIN (SELECT distinct gk_player_id, cluster FROM read_parquet('{ANALYSIS_DIR}/Goal_Keeper_Clustering_Men.parquet')) mc_gk
+                            ON gender = 'male' AND POSITION_TYPE = 'GK'
+                            AND pl.player_id = mc_gk.gk_player_id
                         LEFT JOIN (SELECT distinct player_id, cluster FROM read_parquet('{ANALYSIS_DIR}/Womens_Clustering.parquet')) wc
                             ON gender = 'female'
                             AND pl.player_id = wc.player_id
@@ -44,7 +54,7 @@ duckdb.sql(f"""
                         WHEN TRIM(MEN_WOMEN) = 'female' THEN 'W' 
                         ELSE NULL 
                         END AS MEN_WOMEN, 
-                        BACKS, MIDFIELDERS, FORWARDS, GOALKEEPER, C0, C1, C2, C3, C4, C5, PLAYERS_ON_PITCH, 
+                        BACKS, MIDFIELDERS, FORWARDS, GOALKEEPER, C0, C1, C2, C3, C4, C5, GK_C0, GK_C1, GK_C2, PLAYERS_ON_PITCH, 
                         RANK() OVER (ORDER BY match_id, team_id, period, interval_start) GROUPING_PK
                         FROM agg_attributes
                         

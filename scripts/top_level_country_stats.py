@@ -7,7 +7,7 @@ ANALYSIS_DIR = Path(__file__).parent.parent / "analysis"
 POLYMARKET_DIR = DATA_DIR / "Polymarket"
 STATSBOMB_DIR = DATA_DIR / "Statsbomb"
 ADDITIONAL_DIR = DATA_DIR / "Additional"
-output_path = str(ANALYSIS_DIR / "top_level_country_stats.parquet")
+output_path = str(ADDITIONAL_DIR / "top_level_country_stats.parquet")
 
 duckdb.sql(f"""
                       with event_data as (
@@ -157,7 +157,9 @@ duckdb.sql(f"""
                       )
                       WHERE RANK_PCT = 1
                       )
-                      SELECT *
+                      SELECT top_formation.*, defensive_third_short_pct, defensive_third_patient_pct, attacking_third_short_pct,
+                      middle_third_short_pct, attacking_third_patient_pct, middle_third_direct_pct, middle_third_patient_pct, defensive_third_direct_pct,
+                      total_min
                       FROM top_formation
                       LEFT JOIN possession_type_pct
                         ON top_formation.Country = possession_type_pct.Country
