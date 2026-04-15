@@ -146,7 +146,7 @@ def refresh_comparison(focus_team, opp_team):
    one_diff_gk_c1 = one_cc['one_GK_C1'][0] - two_cc['two_GK_C1'][0]
    one_diff_gk_c2 = one_cc['one_GK_C2'][0] - two_cc['two_GK_C2'][0]
    
-   one_info = combine_info[combine_info["join"] == country_one]
+   one_info = combine_info[combine_info["join"] == focus_team]
 
 
 
