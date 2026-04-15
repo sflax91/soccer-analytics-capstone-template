@@ -16,9 +16,44 @@ y_coords = duckdb.sql(f"""
 
                       
                       
-                      SELECT GROUPING_PK, SUM(DATE_DIFF('second',interval_start,interval_end)) / 11 / 60 grouping_minutes_on_pitch
-                      FROM read_parquet('{ADDITIONAL_DIR}/player_grouping_mapping.parquet') xg
-                      GROUP BY GROUPING_PK
+                      --SELECT *
+                      --FROM read_parquet('{ADDITIONAL_DIR}/top_level_country_stats.parquet') 
+
+                      SELECT Country, SUM(C0) C0, SUM(C1) C1, SUM(C2) C2, SUM(C3) C3, SUM(GK_C0) GK_C0, SUM(GK_C1) GK_C1, SUM(GK_C2) GK_C2
+                      FROM (
+                      SELECT distinct pl.*, 
+                      CASE WHEN PosAdj != 'GK' AND mc.cluster = 0 THEN 1 ELSE 0 END AS C0,
+                      CASE WHEN PosAdj != 'GK' AND mc.cluster = 1 THEN 1 ELSE 0 END AS C1,
+                      CASE WHEN PosAdj != 'GK' AND mc.cluster = 2 THEN 1 ELSE 0 END AS C2,
+                      CASE WHEN PosAdj != 'GK' AND mc.cluster = 3 THEN 1 ELSE 0 END AS C3,
+                      CASE WHEN PosAdj = 'GK' AND gmc.cluster = 0 THEN 1 ELSE 0 END AS GK_C0,
+                      CASE WHEN PosAdj = 'GK' AND gmc.cluster = 1 THEN 1 ELSE 0 END AS GK_C1,
+                      CASE WHEN PosAdj = 'GK' AND gmc.cluster = 2 THEN 1 ELSE 0 END AS GK_C2
+                      FROM (SELECT * FROM read_csv('{ADDITIONAL_DIR}/WC_Data/WC_COMBINED_PLAYERS.csv') WHERE IFNULL(Starter,'N') = 'Y') pl
+                      LEFT JOIN (SELECT player_id, cluster
+                                    FROM read_parquet('{ANALYSIS_DIR}/Mens_Clustering.parquet')) mc
+                        ON pl.StatsbombID = mc.player_id
+                      LEFT JOIN (SELECT player_id, cluster
+                                    FROM read_parquet('{ANALYSIS_DIR}/Goal_Keeper_Clustering_Men.parquet')) gmc
+                        ON pl.StatsbombID = gmc.player_id
+                      
+                      )
+                      GROUP BY Country
+                      
+                      
+                     """)#.write_csv('lineup_check.csv')
+
+print(y_coords)
+
+y_coords = duckdb.sql(f"""
+
+                      
+                      
+                      --SELECT *
+                      --FROM read_parquet('{ADDITIONAL_DIR}/top_level_country_stats.parquet') 
+
+                      SELECT player_id, cluster
+                      FROM read_parquet('{ANALYSIS_DIR}/Mens_Clustering.parquet') mc
                       
                       
                      """)#.write_csv('lineup_check.csv')

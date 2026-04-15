@@ -21,6 +21,8 @@ country_composition = country_composition.drop(columns=['Country'])
 agg_country_xg = pl.read_parquet(ADDITIONAL_DIR / "agg_country_xg.parquet")
 agg_country_time = pl.read_parquet(ADDITIONAL_DIR / "country_grouping.parquet")
 
+cc = pl.read_parquet(ADDITIONAL_DIR / "country_cluster.parquet")
+
 agg_country_time = agg_country_time.group_by("Country").agg(pl.col('grouping_minutes_on_pitch').sum())
 
 
@@ -58,6 +60,13 @@ combine_info['MT: Direct'] = round((combine_info['MT: Direct'] * 100), 4).astype
 combine_info['AT: Short'] = round((combine_info['AT: Short'] * 100), 4).astype('string') + '%'
 combine_info['AT: Patient'] = round((combine_info['AT: Patient'] * 100), 4).astype('string') + '%'
 st.set_page_config(layout="wide")
+
+
+country_one = 'United States'
+focus_team = 'United States'
+country_two = 'Canada'
+opp_team = 'Canada'
+
 
 Bin_Size = 2  # meters
 
@@ -105,6 +114,128 @@ def plot_heat_map_display(df, value_col, team, title, team_one, cmap="coolwarm")
     st.pyplot(plt)
 
 
+@st.fragment
+def updt_team_one(team_input):
+    country_one = team_input
+
+@st.fragment
+def updt_team_two(team_input):
+    country_two = team_input
+
+@st.fragment
+def refresh_comparison(focus_team, opp_team):
+   
+
+   one_cc = cc.filter(pl.col("Country") == focus_team)
+   one_cc = one_cc.rename({'C0':'one_C0', 'C1':'one_C1', 'C2':'one_C2', 'C3':'one_C3', 'GK_C0':'one_GK_C0', 'GK_C1':'one_GK_C1', 'GK_C2':'one_GK_C2'})
+   #one_stats = country_one_df.rename(columns={'Backs':'one_Backs', 'Midfielders':'one_Mi', 'C2':'one_C2', 'C3':'one_C3', 'GK_C0':'one_GK_C0', 'GK_C1':'one_GK_C1', 'GK_C2':'one_GK_C2'})
+   
+   #st.write(focus_team)
+   #st.write(opp_team)
+
+
+   two_cc = cc.filter(pl.col("Country") == opp_team)
+   two_cc = two_cc.rename({'C0':'two_C0', 'C1':'two_C1', 'C2':'two_C2', 'C3':'two_C3', 'GK_C0':'two_GK_C0', 'GK_C1':'two_GK_C1', 'GK_C2':'two_GK_C2'})
+
+   one_diff_c0 = one_cc['one_C0'][0] - two_cc['two_C0'][0]
+   one_diff_c1 = one_cc['one_C1'][0] - two_cc['two_C1'][0]
+   one_diff_c2 = one_cc['one_C2'][0] - two_cc['two_C2'][0]
+   one_diff_c3 = one_cc['one_C3'][0] - two_cc['two_C3'][0]
+
+   one_diff_gk_c0 = one_cc['one_GK_C0'][0] - two_cc['two_GK_C0'][0]
+   one_diff_gk_c1 = one_cc['one_GK_C1'][0] - two_cc['two_GK_C1'][0]
+   one_diff_gk_c2 = one_cc['one_GK_C2'][0] - two_cc['two_GK_C2'][0]
+   
+   one_info = combine_info[combine_info["join"] == country_one]
+
+
+
+   one_stats = combine_info[combine_info["join"] == focus_team]
+   one_diff = pd.DataFrame(
+       {
+           'team_one': [focus_team],
+           'DIFF_C0' : [one_diff_c0],
+           'DIFF_C1' : [one_diff_c1],
+           'DIFF_C2' : [one_diff_c2],
+           'DIFF_C3' : [one_diff_c3],
+           'DIFF_GK_C0' : [one_diff_c0],
+           'DIFF_GK_C1' : [one_diff_c1],
+           'DIFF_GK_C2' : [one_diff_c2],
+
+           'DT: Short Poss %' : one_stats['DT: Short'].item().replace('%',''),
+           'DT: Patient Poss %' : one_stats['DT: Patient'].item().replace('%',''),
+           'MT: Short Poss %' : one_stats['MT: Short'].item().replace('%',''),
+           'MT: Patient Poss %' : one_stats['MT: Patient'].item().replace('%',''),
+           'MT: Direct Poss %' : one_stats['MT: Direct'].item().replace('%',''),
+           'AT: Short Poss %' : one_stats['AT: Short'].item().replace('%',''),
+           'AT: Patient Poss %' : one_stats['AT: Patient'].item().replace('%',''),
+           'DT: Direct Poss %' : one_stats['DT: Direct'].item().replace('%','')
+
+       },
+           index=[0]
+   )
+
+   all_one = pd.merge(one_info, one_stats, how='left', left_on='Country', right_on='Country')
+   
+
+   
+   all_one = pd.merge(one_info, one_diff, how='left', left_on='Country', right_on='team_one')
+   all_one['exp_xG'] = (all_one['DIFF_C1'] * 0.070861) + (all_one['DIFF_GK_C1'] * 0.067093) + (all_one['DIFF_C0'] * 0.061063) + (all_one['DIFF_GK_C0'] * 0.054110) + (all_one['DIFF_C2'] * 0.024292) + (float(all_one['MT: Direct Poss %'][0]) * 0.022467) + (float(all_one['AT: Short Poss %'][0]) * 0.017636) + (90*0.017574) + (float(all_one['DT: Short Poss %'][0]) * 0.011664) + (float(all_one['DT: Direct Poss %'][0]) * 0.003539) + (float(all_one['DT: Patient Poss %'][0]) * -0.008289) + (float(all_one['MT: Patient Poss %'][0]) * -0.012605) - 0.023579 + (float(all_one['MT: Short Poss %'][0]) * -0.025619)
+   
+#    two_diff_c0 = two_cc['two_C0'][0] - one_cc['one_C0'][0]
+#    two_diff_c1 = two_cc['two_C1'][0] - one_cc['one_C1'][0]
+#    two_diff_c2 = two_cc['two_C2'][0] - one_cc['one_C2'][0]
+#    two_diff_c3 = two_cc['two_C3'][0] - one_cc['one_C3'][0]
+#    one_diff_gk_c0 = one_cc['one_GK_C0'][0] - two_cc['two_GK_C0'][0]
+#    one_diff_gk_c1 = one_cc['one_GK_C1'][0] - two_cc['two_GK_C1'][0]
+#    one_diff_gk_c2 = one_cc['one_GK_C2'][0] - two_cc['two_GK_C2'][0]
+   
+#    two_info = combine_info[combine_info["join"] == country_two]
+
+
+
+#    two_stats = combine_info[combine_info["join"] == focus_team]
+#    one_diff = pd.DataFrame(
+#        {
+#            'team_one': [focus_team],
+#            'DIFF_C0' : [one_diff_c0],
+#            'DIFF_C1' : [one_diff_c1],
+#            'DIFF_C2' : [one_diff_c2],
+#            'DIFF_C3' : [one_diff_c3],
+#            'DIFF_GK_C0' : [one_diff_c0],
+#            'DIFF_GK_C1' : [one_diff_c1],
+#            'DIFF_GK_C2' : [one_diff_c2],
+
+#            'DT: Short Poss %' : one_stats['DT: Short'].item().replace('%',''),
+#            'DT: Patient Poss %' : one_stats['DT: Patient'].item().replace('%',''),
+#            'MT: Short Poss %' : one_stats['MT: Short'].item(),
+#            'MT: Patient Poss %' : one_stats['MT: Patient'].item(),
+#            'MT: Direct Poss %' : one_stats['MT: Direct'].item().replace('%',''),
+#            'AT: Short Poss %' : one_stats['AT: Short'].item(),
+#            'AT: Patient Poss %' : one_stats['AT: Patient'].item(),
+#            'DT: Direct Poss %' : one_stats['DT: Direct'].item()
+
+#        },
+#            index=[0]
+#    )
+
+#    all_two = pd.merge(two_info, two_stats, how='left', left_on='Country', right_on='Country')
+   
+
+   
+#    all_two = pd.merge(two_info, one_diff, how='left', left_on='Country', right_on='team_one')
+#    all_two['exp_xG'] = all_one['DIFF_C1'] * 0.070861 + all_one['DIFF_GK_C1'] * 0.067093+ all_one['DIFF_C0'] * 0.061063 + all_one['DIFF_GK_C0'] * 0.054110 + all_one['DIFF_C2'] * 0.024292 #+ float(all_one['MT: Direct Poss %'][0]) * 0.022467 #+ float(all_one['AT: Short Poss %'][0]) * 0.017636
+   
+
+
+
+
+
+   st.table(all_one[['DT: Short Poss %', 'DT: Patient Poss %', 'DT: Direct Poss %', 'MT: Short Poss %', 'MT: Patient Poss %', 'MT: Direct Poss %', 'AT: Short Poss %', 'AT: Patient Poss %', 'exp_xG']], hide_index=True)
+   
+
+
+
 st.title('2026 World Cup Comparison Tool')
 
 col1, col2, col3 = st.columns([.475,.05,.475])
@@ -114,8 +245,10 @@ with col1:
     country_one_df = combine_info[combine_info["join"] == country_one]
     st.table(country_one_df[['Group', 'FIFA Confederation', 'Manager', 'Backs', 'Midfielders', 'Forwards']], hide_index=True)
 
-    st.table(country_one_df[['DT: Short', 'DT: Patient', 'DT: Direct', 'MT: Short', 'MT: Patient', 'MT: Direct', 'AT: Short', 'AT: Patient']], hide_index=True)
-
+    #updt_team_one(country_one)
+    #updt_team_two(country_two)
+    #st.table(country_one_df[['DT: Short', 'DT: Patient', 'DT: Direct', 'MT: Short', 'MT: Patient', 'MT: Direct', 'AT: Short', 'AT: Patient']], hide_index=True)
+    refresh_comparison(country_one, country_two)
     plot_heat_map_display(agg_country_xg, "total_xg", country_one, "Offense at Top", True)
 
 
@@ -126,6 +259,8 @@ with col3:
     country_two_df = combine_info[combine_info["join"] == country_two]
     st.table(country_two_df[['Group', 'FIFA Confederation', 'Manager', 'Backs', 'Midfielders', 'Forwards']], hide_index=True)
 
-    st.table(country_two_df[['DT: Short', 'DT: Patient', 'DT: Direct', 'MT: Short', 'MT: Patient', 'MT: Direct', 'AT: Short', 'AT: Patient']], hide_index=True)
+    #st.table(country_two_df[['DT: Short', 'DT: Patient', 'DT: Direct', 'MT: Short', 'MT: Patient', 'MT: Direct', 'AT: Short', 'AT: Patient']], hide_index=True)
+
+    refresh_comparison(country_two, country_one)
 
     plot_heat_map_display(agg_country_xg, "total_xg", country_two, "Defense at Top", False)

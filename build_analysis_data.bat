@@ -62,4 +62,5 @@ python %~dp0Scripts\agg_country_xg.py
 python %~dp0Scripts\player_grouping_mapping.py
 python %~dp0Scripts\country_grouping.py
 python %~dp0Scripts\grouping_xg.py
+python %~dp0Scripts\country_cluster.py
 
